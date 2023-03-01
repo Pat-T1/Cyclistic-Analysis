@@ -1,0 +1,3648 @@
+## **1. Introduction**
+
+#### The following markdown file documents all steps, code, and tools used to perform my analysis of the Cyclistic ride share system.
+
+#### This project was presented as an optional capstone project for the Google Grow Data Analytics Certification program.
+
+## **Scenario**
+
+#### In this assignment, I was asked to fill the role of a junior data analyst working for the Cyclistic bike share program.
+
+#### Since it’s inception in 2016, Cyclistic grown to a fleet of 5,824 geotracked bikes that can be rented and returned through a network of 692 stations across Chicago, IL.
+
+#### Cyclistic users can choose from three pricing plans: single-ride passes, full-day passes, and an annual membership. Single-ride and full-day pass users are internally referred to as “casual riders,” while annual membership holders are called “members.”
+
+## **Business Objective**
+
+#### Cyclistic leadership plans to increase revenue by developing a digital marketing campaign to convert casual customers into annual subscribers. A successful, data-driven marketing campaign depends on a clear understanding of current casual/member behavior.
+
+## **Key Stakeholders**
+
+#### **Lily Moreno, Cyclistic director of marketing:** My direct report on this assignment and my line of communication to Cyclistic’s digital marketing team, who will create a campaign based on my analysis.
+
+#### **Cyclistic Executive Team:** The executive team will have final approval for the digital marketing campaign presented by Lily Moreno and her team.
+
+## **Business Task**
+
+#### My business task is to clean, prepare, and analyze the last year of Cyclistic ride data. These findings will then be vizualized and presented with recommendations for an effective digital marketing strategy that will convince casual customers to purchase an annual Cyclistic membership.
+
+#### To complete my objective, I will need to answer the following questions:
+
+#### **1. How do annual members and casual riders use Cyclistic bikes differently?**
+
+#### **2. Why would casual riders buy Cyclistic annual memberships?**
+
+#### **3. How can Cyclistic use digital media to convince casual riders to become members?**
+
+## **2. Datasets Used in Analysis and Tool Selection**
+
+## **Overview**
+
+#### My primary source of data for this project are monthly ride reports maintained internally by Cyclistic, which document all customer activity within the system.
+
+#### Cyclsitic monthly ride reports can be found [here](https://divvy-tripdata.s3.amazonaws.com/index.html)
+
+#### I also chose to incorporate a secondary source of data in my analysis: a daily weather report for the Chicago area covering my period of study.
+
+#### Chicago daily weather reports were acquired via [Visual Crossing Weather API Service.](https://www.visualcrossing.com/weather/weather-data-services#)
+
+## **Data Organization**
+
+#### Cyclistic monthly ride reports are stored in .csv files that are uploaded on a monthly basis. The 12 most recent monthly reports were used for this report (September 2021 - August 2022.)
+
+#### These reports include data like the **type of bike** used, **customer type**, **start and end station names**, **start and end station GPS coordinates**, and **date/timestamps** logged at the beginning and conclusion of each ride.
+
+#### Chicago daily weather reports were stored in a single .csv file and include average daily temperature, total rainfall, humidity, and other environmental factors during the same period of study (September 2021 - August 2022.)
+
+## **Data Credibility**
+
+#### Ride data is *original* and collected *directly* by Motivate, inc., the company that manages Chicago’s Cyclistic system. This data is *comprehensive* as it includes all rides taken during the period of study, *current* because it includes the latest ride data available at time of study, and clearly *cited*.
+
+#### Weather data was orginally collected directly by the US National Weather Service API and is considered open data to the public. Visualcrossing.com was used as the source for this data because it compiles multiple NWS API reports into a single document for ease of use and is clearly cited. A review of Visual Crossing and NWS API reports shows they offer identical data for the period of study.
+
+## **Data Licensing, Security, Privacy, and Accessibility**
+
+#### Cyclistic ride data is made available under the following [license](https://ride.divvybikes.com/data-license-agreement), while NWS API data is made available as [open data](https://www.weather.gov/documentation/services-web-api) by the US government.
+
+#### Cyclistic data is anonymized to protect user privacy with no identifying demographic attributes provided beyond Cyclistic membership status. This data anonymization will close some avenues of customer-pattern analysis, but still provides sufficient information for our level of analysis.
+
+## **Tool Selection**
+
+#### Due to the size of this dataset (5,883,043 documented rides,) spreadsheets lack the processing power to perform practical analysis. An SQL tool like BigQuery can handle a dataset of this size, however the lack of in-program visualization tools will limit our ability to identify trends worth further investigation as our analysis proceeds.
+
+#### As a result, I chose to use R Studio for this project, as it has the power to maniuplate such a large data set, readily-available packages to complete complex tasks, and allows me to visualize findings as I proceed.
+
+#### In addition to R, I also periodically used a Google Sheet for basic calculations and to quickly highlight interesting data points with conditional formatting. Relevant pages are linked throuhgout the report when used.
+
+## **3. Workspace Preparation**
+
+#### To complete this assignment, I need to review, clean, analyze, and visualize rider data. I chose the following packages to complete these tasks.
+
+    library(tidyverse) ## Basic data manipulation
+    library(lubridate) ## Transforms dates and time stamps
+    library(ggplot2) ## Visualization tool
+    library(readxl) ## Data read-in utility
+    library(skimr) ## High-level data review
+    library(janitor) ## General-purpose data cleaning utility
+    library(mapview) ## Geographic visualization in R
+    library(RColorBrewer) ## Wider palette range for visualizations
+    library(geosphere) ## Calculates distances between GPS coordinates
+    library(ggpubr) ## Improved visualization display for side-by-side comparison
+
+    mapviewOptions(fgb = FALSE, georaster = FALSE)
+
+## **4. Data Import**
+
+#### User data is stored in 12 csv files. Each file was found to have identical schema, so there is no need to modify these files prior to being bound into a single dataframe. The Chicago Weather file will be left unbound, as all annual data is already compiled into a single file.
+
+    getwd() ## Determine current directory
+
+    ## [1] "A:/Cyclistic Final"
+
+    ## Initial data import
+    rides_2109 <- read.csv('202109_raw_data.csv')
+    rides_2110 <- read.csv('202110_raw_data.csv')
+    rides_2111 <- read.csv('202111_raw_data.csv')
+    rides_2112 <- read.csv('202112_raw_data.csv')
+    rides_2201 <- read.csv('202201_raw_data.csv')
+    rides_2202 <- read.csv('202202_raw_data.csv')
+    rides_2203 <- read.csv('202203_raw_data.csv')
+    rides_2204 <- read.csv('202204_raw_data.csv')
+    rides_2205 <- read.csv('202205_raw_data.csv')
+    rides_2206 <- read.csv('202206_raw_data.csv')
+    rides_2207 <- read.csv('202207_raw_data.csv')
+    rides_2208 <- read.csv('202208_raw_data.csv')
+    chicago_weather <- read.csv('chicago weather.csv')
+
+#### Binding Monthly Reports
+
+    annual_trips <- rbind(rides_2109, 
+                          rides_2110, 
+                          rides_2111, 
+                          rides_2112, 
+                          rides_2201,
+                          rides_2202, 
+                          rides_2203, 
+                          rides_2204, 
+                          rides_2205, 
+                          rides_2206,
+                          rides_2207, 
+                          rides_2208)
+
+#### Removing source files to keep a tidy workspace
+
+    rm(rides_2109, 
+       rides_2110, 
+       rides_2111, 
+       rides_2112, 
+       rides_2201,
+       rides_2202, 
+       rides_2203, 
+       rides_2204, 
+       rides_2205, 
+       rides_2206,
+       rides_2207, 
+       rides_2208)
+
+## **5. Data Inspection and Cleaning (annual\_trips)**
+
+    glimpse(annual_trips)
+
+    ## Rows: 5,883,043
+    ## Columns: 13
+    ## $ ride_id            <chr> "9DC7B962304CBFD8", "F930E2C6872D6B32", "6EF7213790…
+    ## $ rideable_type      <chr> "electric_bike", "electric_bike", "electric_bike", …
+    ## $ started_at         <chr> "2021-09-28 16:07:10", "2021-09-28 14:24:51", "2021…
+    ## $ ended_at           <chr> "2021-09-28 16:09:54", "2021-09-28 14:40:05", "2021…
+    ## $ start_station_name <chr> "", "", "", "", "", "", "", "", "", "", "Clark St &…
+    ## $ start_station_id   <chr> "", "", "", "", "", "", "", "", "", "", "TA13070001…
+    ## $ end_station_name   <chr> "", "", "", "", "", "", "", "", "", "", "", "", "",…
+    ## $ end_station_id     <chr> "", "", "", "", "", "", "", "", "", "", "", "", "",…
+    ## $ start_lat          <dbl> 41.89000, 41.94000, 41.81000, 41.80000, 41.88000, 4…
+    ## $ start_lng          <dbl> -87.68000, -87.64000, -87.72000, -87.72000, -87.740…
+    ## $ end_lat            <dbl> 41.89, 41.98, 41.80, 41.81, 41.88, 41.88, 41.74, 41…
+    ## $ end_lng            <dbl> -87.67, -87.67, -87.72, -87.72, -87.71, -87.74, -87…
+    ## $ member_casual      <chr> "casual", "casual", "casual", "casual", "casual", "…
+
+#### Glimpse reveals several issues with our annual\_trips dataset we will need to address through cleaning:
+
+#### 1. Timestamps for started\_at and ended\_at are stored as strings. We will cast these as numeric and use lubridate to break out month, week, day, and hour for more granular analysis.
+
+#### 2. Station gps data is also recorded as doubles. I will change these to numeric values to avoid possible rounding issues later.
+
+#### 3. Glimpse also presents us with a significant issue regarding location data: many station names are missing, possibly due to truncated gps coordinates.
+
+    skim(annual_trips)
+
+<table>
+<caption>Data summary</caption>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Name</td>
+<td style="text-align: left;">annual_trips</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Number of rows</td>
+<td style="text-align: left;">5883043</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Number of columns</td>
+<td style="text-align: left;">13</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">_______________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Column type frequency:</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">character</td>
+<td style="text-align: left;">9</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">numeric</td>
+<td style="text-align: left;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">________________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Group variables</td>
+<td style="text-align: left;">None</td>
+</tr>
+</tbody>
+</table>
+
+Data summary
+
+**Variable type: character**
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 12%" />
+<col style="width: 17%" />
+<col style="width: 5%" />
+<col style="width: 5%" />
+<col style="width: 8%" />
+<col style="width: 11%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">min</th>
+<th style="text-align: right;">max</th>
+<th style="text-align: right;">empty</th>
+<th style="text-align: right;">n_unique</th>
+<th style="text-align: right;">whitespace</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">ride_id</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">5883043</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">rideable_type</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">started_at</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">4912339</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ended_at</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">4919944</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">start_station_name</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">884365</td>
+<td style="text-align: right;">1439</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">start_station_id</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">884363</td>
+<td style="text-align: right;">1273</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">end_station_name</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">946303</td>
+<td style="text-align: right;">1453</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">end_station_id</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">946303</td>
+<td style="text-align: right;">1282</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">member_casual</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+
+**Variable type: numeric**
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 10%" />
+<col style="width: 15%" />
+<col style="width: 7%" />
+<col style="width: 5%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">mean</th>
+<th style="text-align: right;">sd</th>
+<th style="text-align: right;">p0</th>
+<th style="text-align: right;">p25</th>
+<th style="text-align: right;">p50</th>
+<th style="text-align: right;">p75</th>
+<th style="text-align: right;">p100</th>
+<th style="text-align: left;">hist</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">start_lat</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">41.64</td>
+<td style="text-align: right;">41.88</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">41.93</td>
+<td style="text-align: right;">45.64</td>
+<td style="text-align: left;">▇▁▁▁▁</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">start_lng</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-87.65</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">-87.84</td>
+<td style="text-align: right;">-87.66</td>
+<td style="text-align: right;">-87.64</td>
+<td style="text-align: right;">-87.63</td>
+<td style="text-align: right;">-73.80</td>
+<td style="text-align: left;">▇▁▁▁▁</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">end_lat</td>
+<td style="text-align: right;">5727</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">41.39</td>
+<td style="text-align: right;">41.88</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">41.93</td>
+<td style="text-align: right;">42.37</td>
+<td style="text-align: left;">▁▁▇▁▁</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">end_lng</td>
+<td style="text-align: right;">5727</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-87.65</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">-88.97</td>
+<td style="text-align: right;">-87.66</td>
+<td style="text-align: right;">-87.64</td>
+<td style="text-align: right;">-87.63</td>
+<td style="text-align: right;">-87.50</td>
+<td style="text-align: left;">▁▁▁▁▇</td>
+</tr>
+</tbody>
+</table>
+
+#### Skim reveals the following additional concerns:
+
+#### 1. “ride\_id” “rideable\_type” and start/end timestamps are 100% complete, however there are about 1.8 million rides missing start or end station data. Finally, there are 5,727 rides with missing (null) gps data for end stations.
+
+#### 2. “ride\_id” is our primary key in this data frame, and we have 5,883,043 unique records, meaning that there are no duplicate entries to clean.
+
+#### 3. While the Cyclistic system has two bike types, electric and classic, there is a third category, “docked”, that will require additional research. It is possible these are the adaptive bikes mentioned in the assignment brief, but this will require investigation due to a lack of real-world subject matter experts to consult.
+
+## **Investigating Missing Start/End Station Data**
+
+#### I will first create a dataset that includes all rides with empty start/end station fields and then use the count command to see if there are any commonalities between these records.
+
+    missing_station_data <- annual_trips %>%  
+      filter(start_station_id == ""|
+               end_station_id == ""|
+               start_station_name == "" |
+               end_station_name == ""
+             )
+
+#### Identifying common trends in missing data.
+
+    count(missing_station_data, rideable_type)
+
+    ##   rideable_type       n
+    ## 1  classic_bike    5843
+    ## 2   docked_bike    2209
+    ## 3 electric_bike 1314845
+
+    count(missing_station_data, member_casual)
+
+    ##   member_casual      n
+    ## 1        casual 590488
+    ## 2        member 732409
+
+#### The above count commands show that missing station data occurs across all bike types and customer types.
+
+#### Next I will create four datasets using the filter command to locate any start/end station records that can be repaired, rather than removed.
+
+    partial_data <- missing_station_data %>% 
+      filter(start_station_id == ""&
+               start_station_name != "" 
+             )
+    partial_data_2 <- missing_station_data %>% 
+      filter(start_station_name == ""&
+               start_station_id != ""
+             )
+
+    partial_data_3 <- missing_station_data %>% 
+      filter(end_station_id == ""&
+               end_station_name != ""
+             )
+
+    partial_data_4 <- missing_station_data %>% 
+      filter(end_station_name == ""&
+               end_station_id != ""
+             )
+
+#### These filters reveal only two partial records where start station name is not present, but there is a start station id (20215 and WL-008.) I will now attempt to repair those records by first identifying the station names we need to add to these records.
+
+    partial_station_1 <- annual_trips %>% 
+      filter(end_station_id == "WL-008")
+      
+    partial_station_2 <- annual_trips %>% 
+      filter(end_station_id == "20215")
+
+#### I will now “repair” those records using the station names I recovered:
+
+    annual_trips$start_station_name[
+      annual_trips$start_station_id == "WL-008"] <- "Clinton St & Roosevelt Rd" ## modifying record
+
+    annual_trips_check_1 <- annual_trips %>% 
+    filter(ride_id == "EE197EDA4CF8CFE5") ## Confirming modification
+
+    rm(annual_trips_check_1, 
+       partial_station_1)
+
+    annual_trips$start_station_name[
+    annual_trips$start_station_id == "20215"] <- "Hegewisch Metra Station" ## modifying record
+
+    annual_trips_check_2 <- annual_trips %>% 
+    filter(ride_id == "DE82A15026BA3056") ## Confirming modification
+
+    rm(annual_trips_check_2, 
+       partial_station_2)
+
+    rm(partial_data, 
+       partial_data_2, 
+       partial_data_3, 
+       partial_data_4) ## Cleaning workspace
+
+#### After salvaging the records I could, I will now need to address NA entries in station data.
+
+    colSums(is.na(missing_station_data))
+
+    ##            ride_id      rideable_type         started_at           ended_at 
+    ##                  0                  0                  0                  0 
+    ## start_station_name   start_station_id   end_station_name     end_station_id 
+    ##                  0                  0                  0                  0 
+    ##          start_lat          start_lng            end_lat            end_lng 
+    ##                  0                  0               5727               5727 
+    ##      member_casual 
+    ##                  0
+
+#### This quick check of NA values found 5727 records(0.097% of all records) lack any ending gps data. I will first create a dataframe highlighting these records.
+
+    missing_gps_data <- missing_station_data %>% 
+      filter(
+        is.na(
+        end_lat|
+          end_lng
+          )
+        )
+
+#### With these rides isolated, I will now use group and count functions to try and identify any commonalities in these records.
+
+    missing_gps_data_2 <- missing_gps_data %>% 
+      group_by(member_casual) %>% 
+      count(rideable_type, 
+            name = "ride_count")
+
+#### This reveals a trend: Only “docked” and “classic” bike types have null gps data. Since many rideshare systems start with pedal-powered bikes only, this could mean these bikes are some of the oldest in the fleet and may be experiencing some type of hardware failure, or were never docked and are potentially stolen. These trips will be removed from our study due to their ambiguity.
+
+#### In a real-world scenario, I would speak with a subject matter expert from Cyclistic’s operations team to better understand the implications of these missing records before removing them from my study.
+
+    ## Clearing old datasets
+    rm(missing_gps_data,
+      missing_gps_data_2)
+
+    annual_trips_1 <- annual_trips %>% ## Filtering NA gps data
+      filter(!is.na(end_lat), 
+             !is.na(end_lng)
+             )
+    colSums(is.na(annual_trips_1)) ## Verifying removal
+
+    ##            ride_id      rideable_type         started_at           ended_at 
+    ##                  0                  0                  0                  0 
+    ## start_station_name   start_station_id   end_station_name     end_station_id 
+    ##                  0                  0                  0                  0 
+    ##          start_lat          start_lng            end_lat            end_lng 
+    ##                  0                  0                  0                  0 
+    ##      member_casual 
+    ##                  0
+
+#### Removing NA values helps ensure the accuracy of our study, however we need a better understanding of why so many records are missing station-to-station data. The command below will group records by start/end lat/lng so that we can find common causes.
+
+    missing_start_lat <- missing_station_data %>% ## Filtering and grouping by start_lat to find common causes
+      filter(start_station_name == "") %>% 
+      count(start_lat, 
+            wt = NULL, 
+            sort = TRUE, 
+            name = "instances"
+            )
+
+    missing_start_lng <- missing_station_data %>% 
+      filter(start_station_name == "") %>% 
+      count(start_lng, 
+            wt = NULL, 
+            sort = TRUE, 
+            name = "instances"
+      )
+
+#### This reveals the cause for missing station data: gps coordinates are typically 7 digits long, and these entries lack anywhere from 1 to 5 digits, making them too innacurate to be mapped to stations. We will now perform the same test on end stations to ensure this is a consistent issue.
+
+    missing_end_lat <- missing_station_data %>% 
+      filter(end_station_name == "") %>% 
+      count(end_lat, 
+            wt = NULL, 
+            sort = TRUE, 
+            name = "instances"
+      )
+
+    missing_end_lng <- missing_station_data %>% 
+      filter(end_station_name == "") %>% 
+      count(end_lng, 
+            wt = NULL, 
+            sort = TRUE, 
+            name = "instances"
+      )
+
+#### Once again, we see truncated gps coordinates are the cause for this missing station data.
+
+    ## clearing old datasets
+    rm(missing_start_lat,
+      missing_start_lng,
+      missing_end_lat,
+      missing_end_lng)
+
+#### Now that we know the cause for this incomplete data, we need to decide whether or not to include it in our analysis.
+
+#### I came to the following decision: There are 1,322,897, or 22.51% of our total records missing station data. Ignoring this many records completely may skew our analysis. Instead, I will continue to use these records for our behavioral analysis of customers, however they will be excluded from station-to-station analysis later in the study.
+
+#### The missing\_gps\_data\_2 data set raises questions about “docked bikes” that I need to understand before analysis. It appears that only casual customers used docked bikes in missing\_gps\_data\_2. I want to look at the entire data set and see if that is true for the entire period of study.
+
+    bike_type <- annual_trips_1 %>% 
+      group_by(member_casual, rideable_type) %>% 
+      summarize(ride_count = n_distinct(ride_id)
+                )
+    bike_type_2 <- bike_type %>% 
+    mutate(pct_ride_count = ((ride_count/sum(ride_count))*100))
+
+    ## Clearing old datasets
+    rm(bike_type,
+      bike_type_2,
+      missing_station_data)
+
+#### It appears that this trend is consistent across our entire period of study: docked bikes appear to only be used by casual customers. Docked bikes make up 3.5% of all rides and 8.35% of all casual rides in our period of study. This will require further study and a decision later on whether or not to include these records in our analysis.
+
+## **6. Subject Matter Expert Consultation**
+
+#### The data inspection and cleaning process is not complete, but our process has already generated several questions that will dictate how we proceed with the rest of our data cleaning.
+
+#### In a real-world scenario, I would stop at this point and consult with a subject matter expert from Cyclistic’s operations team and ask the following:
+
+#### 1: **Does incomplete gps data indicate a mechanical or software fault, or possible theft/improper return of a bike?** If so, these rides may skew results and need to be removed from our analysis.
+
+#### 2: **What does the “docked bike” designation actually mean?** Since it is only used by casual customers, I believe it may indicate a promotional ride offered through a marketing initiative, or it could indicate a bike removed from a dock for maintenance.
+
+#### 3: Most bicycle share systems have limitations on how long a rider can use a bike before incurring financial penalties. I would need to speak with someone in the operations team to understand:
+
+#### **A) What are the time limits for casual/member riders?**
+
+#### **B) Is exceeding these time limits Considered a negative outcome for the system by lowering the number of available bikes, or a positive outcome, as longer rides increase revenue?**
+
+#### Understanding these elements of the system and its goals would make it easier for me to identify optimal bike usage patterns.
+
+## **7. Assumptions**
+
+#### Because I do not have access to a subject matter expert, I made the following assumptions to guide the remainder of my cleaning and analysis:
+
+#### 1. Rides with incomplete station data make up nearly 23% of all rides on the system, and thus their complete removal can have a major impact on our findings. As a result, I will keep these rides for my trip length and bike type analyses, however I will remove them from any analysis of geographic, station-to-station behavior.
+
+#### 2. Rides with null end-station data might indicate theft of a bike or the bike’s removal from circulation for maintenance. As a result, these rides will be removed from all analysis.
+
+#### 3. Docked bikes make up a small (3.53%) percent of overall rides and are only used by “casual” customers. When my data is cleaned, I will look at how these rides differ in duration compared to non-docked casual rides and make a decision on whether or not to remove these trips from my casual/member comparison.
+
+#### 4. I do not have parameters for Cyclistic’s rental duration. As a result, I will use the following conditions when choosing to include or remove a given trip:
+
+#### 4a. Rides under one minute may indicate the rental of a bike that had mechanical issues like a flat tire, or a customer simply “testing” a dock. Since sub-1-minute rides are unlikely to be actual station-to-station rides, these will be removed from all analysis.
+
+#### 4b. Because I do not have information about rental durations, I will make the assumption that any rides with a duration of 8 hours or less are acceptable to the Cyclistic systems terms of service. However, I will remove any rides that last for more than 8 hours from my analyis, as these might indicate a lost/stolen bike, or a failure to properly dock, leading to others using the bike without the original user’s permission and skewing data.
+
+## **8. Resuming Data Cleaning With New Assumptions**
+
+## **Renaming and Checking Columns**
+
+#### I will be spending a long time with this data, so I will simplify the dataframe name, bike\_type and member\_casual columns for easier use during analysis and visualization.
+
+    trips_1 <- annual_trips_1 %>% 
+      rename('bike_type' = rideable_type, 
+             'customer_type' = member_casual
+      ) %>% 
+      clean_names()
+
+    rm(annual_trips, 
+       annual_trips_1)
+
+## **Adapting Timestamps**
+
+#### Some of the most valuable data we can harvest lives inside of “started\_at” and “ended\_at” fields, however it needs to be broken out to be properly studied.
+
+#### The following code will use mutate to create a calendar day, week, month, weekday, and starting hour. We will also use difftime to determine the length of time a bike is in use. *Note* in order to avoid potential rounding errors in the future, I will measure all rides in seconds unless otherwise stated.
+
+    trips_2 <- trips_1 %>% 
+      mutate(
+        weekday = wday(started_at, label = T, abbr = F),
+        month = month(started_at, label = T, abbr =F),
+        week = strftime(started_at, format = "%V"),
+        day = day(started_at),
+        start_hour = hour(started_at),
+        trip_length = as.numeric(difftime(ended_at, started_at,units = "secs"))
+      )
+
+    rm(trips_1)
+
+## **Testing Trip Length**
+
+#### Trip length will be a critical element of our study, so I will run some quick tests to identify any potential issues with this new field.
+
+    max(trips_2$trip_length)
+
+    ## [1] 2442301
+
+    min(trips_2$trip_length)
+
+    ## [1] -8245
+
+#### Max trip length appears to be 28.27 days. This should not be an issue since we plan to filter 8+-hour rides, however our minimum value is a negative value of -8245. This indicates a possible error in the code, so I will now filter those negative values for study.
+
+    time_check <- trips_2 %>% 
+    filter(trip_length < 0)
+
+#### time\_check shows us 135 records with negative time values. Reviewing the first lines of time\_check reveal that start times are occuring AFTER end times, suggesting some error in data collection.
+
+#### I will now verify that is the case for all 135 records using case\_when.
+
+    time_check_2 <- time_check %>% 
+      mutate(calc_check =
+        case_when(started_at > ended_at ~ 'no calc error', 
+                  TRUE ~ 'calc error')
+            )
+    time_check_3 <- time_check_2 %>%  
+      group_by(calc_check) %>%  
+      count(calc_check, 
+            name = "count")
+
+    rm(time_check, time_check_2, time_check_3)
+
+#### time\_check\_3 verifies that the negative time values are a result of faulty data collection.
+
+#### Rather than multiplying each negative value by -1 and re-adding to our dataset, I will remove these rides because I cannot confirm their veracity.
+
+#### Per the assumptions above and the results of our time check, I will now remove all rides shorter than a minute and longer than 8 hours (28,800 seconds.)
+
+    trips_3 <- trips_2 %>% 
+      filter(trip_length >= 60,
+             trip_length <= 28800)
+
+#### This filter removed a total of 114,714 records from our dataset.
+
+## **Recasting GPS Coordinates**
+
+#### In my experience, some commands and packages in R can round unpredictably when working with doubles, so I will now recast gps coordinates as numeric data to avoid potential issues.
+
+    trips_4 <- trips_3 %>% 
+      transform(start_lat = as.numeric(start_lat),
+                start_lng = as.numeric(start_lng),
+                end_lat = as.numeric(end_lat),
+                end_lng = as.numeric(end_lng),
+                trip_length = as.numeric(trip_length)
+      )
+
+    rm(trips_2, 
+       trips_3)
+
+## **Checking Our Work**
+
+#### I will now use skim\_without\_charts to test trips\_4 for any further missing records before proceeding.
+
+    skim_without_charts(trips_4)
+
+<table>
+<caption>Data summary</caption>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Name</td>
+<td style="text-align: left;">trips_4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Number of rows</td>
+<td style="text-align: left;">5762602</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Number of columns</td>
+<td style="text-align: left;">19</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">_______________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Column type frequency:</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">character</td>
+<td style="text-align: left;">10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">factor</td>
+<td style="text-align: left;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">numeric</td>
+<td style="text-align: left;">7</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">________________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Group variables</td>
+<td style="text-align: left;">None</td>
+</tr>
+</tbody>
+</table>
+
+Data summary
+
+**Variable type: character**
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 12%" />
+<col style="width: 17%" />
+<col style="width: 5%" />
+<col style="width: 5%" />
+<col style="width: 8%" />
+<col style="width: 11%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">min</th>
+<th style="text-align: right;">max</th>
+<th style="text-align: right;">empty</th>
+<th style="text-align: right;">n_unique</th>
+<th style="text-align: right;">whitespace</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">ride_id</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">5762602</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">bike_type</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">started_at</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">4828104</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ended_at</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">4835266</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">start_station_name</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">856399</td>
+<td style="text-align: right;">1437</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">start_station_id</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">856399</td>
+<td style="text-align: right;">1271</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">end_station_name</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">903201</td>
+<td style="text-align: right;">1450</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">end_station_id</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">903201</td>
+<td style="text-align: right;">1280</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">customer_type</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">week</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">52</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+
+**Variable type: factor**
+
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 9%" />
+<col style="width: 13%" />
+<col style="width: 7%" />
+<col style="width: 8%" />
+<col style="width: 48%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: left;">ordered</th>
+<th style="text-align: right;">n_unique</th>
+<th style="text-align: left;">top_counts</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">weekday</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: left;">Sat: 943376, Sun: 823784, Wed: 823576,
+Thu: 820492</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">month</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: left;">Jul: 804298, Aug: 767163, Jun: 752247,
+Sep: 743926</td>
+</tr>
+</tbody>
+</table>
+
+**Variable type: numeric**
+
+<table>
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 10%" />
+<col style="width: 15%" />
+<col style="width: 8%" />
+<col style="width: 8%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 8%" />
+<col style="width: 9%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">mean</th>
+<th style="text-align: right;">sd</th>
+<th style="text-align: right;">p0</th>
+<th style="text-align: right;">p25</th>
+<th style="text-align: right;">p50</th>
+<th style="text-align: right;">p75</th>
+<th style="text-align: right;">p100</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">start_lat</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">41.64</td>
+<td style="text-align: right;">41.88</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">41.93</td>
+<td style="text-align: right;">45.64</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">start_lng</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-87.65</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">-87.84</td>
+<td style="text-align: right;">-87.66</td>
+<td style="text-align: right;">-87.64</td>
+<td style="text-align: right;">-87.63</td>
+<td style="text-align: right;">-73.80</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">end_lat</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">41.39</td>
+<td style="text-align: right;">41.88</td>
+<td style="text-align: right;">41.90</td>
+<td style="text-align: right;">41.93</td>
+<td style="text-align: right;">42.37</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">end_lng</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">-87.65</td>
+<td style="text-align: right;">0.03</td>
+<td style="text-align: right;">-88.97</td>
+<td style="text-align: right;">-87.66</td>
+<td style="text-align: right;">-87.64</td>
+<td style="text-align: right;">-87.63</td>
+<td style="text-align: right;">-87.50</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">day</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">15.72</td>
+<td style="text-align: right;">8.72</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">9.00</td>
+<td style="text-align: right;">16.00</td>
+<td style="text-align: right;">23.00</td>
+<td style="text-align: right;">31.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">start_hour</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">14.22</td>
+<td style="text-align: right;">5.03</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">11.00</td>
+<td style="text-align: right;">15.00</td>
+<td style="text-align: right;">18.00</td>
+<td style="text-align: right;">23.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">trip_length</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1005.65</td>
+<td style="text-align: right;">1275.22</td>
+<td style="text-align: right;">60.00</td>
+<td style="text-align: right;">376.00</td>
+<td style="text-align: right;">655.00</td>
+<td style="text-align: right;">1171.00</td>
+<td style="text-align: right;">28800.00</td>
+</tr>
+</tbody>
+</table>
+
+#### This skim verifies difftime worked, with 7 unique weekdays, 52 unique calendar weeks, and 12 unique months. We also have a 100% completion rate for these records.
+
+## **Inspecting Docked Bikes**
+
+#### Docked bikes remain the only unanswered question as we clean and inspect our data. Since we do not have a subject matter expert to consult, we will group by bike and customer type to understand the data better.
+
+    trips_by_type <- trips_4 %>% 
+      group_by(bike_type, customer_type) %>% 
+      summarize(mean_trip_length = mean(trip_length),
+                ride_count = n_distinct(ride_id)
+                )
+
+#### The above summary shows us an interesting trend: while only making up 3.52% of all rides, docked bikes are ridden 147.01% longer than casual customers on electric bikes, and 83.87% longer than casual customers on classic bikes.
+
+## **Analyzing Start and End Stations for Docked Bikes**
+
+#### Because docked bikes are only ridden by casual customers and are used for longer periods of time, I theorize that docked bikes may be some sort of promotional designation given to bikes offered to casual customers as part of a previous membership campaign.
+
+#### If this theory is true, there should be a limited number of stations where docked bikes are collected and deposited.
+
+    docked_start_stations <- trips_4 %>% 
+      filter(bike_type == "docked_bike") %>%
+      group_by(start_station_name) %>%
+      summarize(ride_count = n_distinct(ride_id)
+      )
+
+    docked_end_stations <- trips_4 %>% 
+      filter(bike_type == "docked_bike") %>%
+      group_by(end_station_name) %>%
+      summarize(ride_count = n_distinct(ride_id)
+      )
+
+#### Unfortunately, this theory does not hold true. Docked bikes appear to be ridden to and from every station in the system (679 start and 689 end stations.)
+
+#### I will further test this theory by seeing if docked bikes are only used during certain parts of the year.
+
+    docked_rides <- trips_4 %>% 
+    filter(bike_type == "docked_bike") %>% 
+    group_by(week) %>% 
+    summarize(ride_count = n_distinct(ride_id)
+      )
+
+#### Docked bikes are used on all 52 calendar weeks. Disproving my theory.
+
+    rm(docked_end_stations, docked_rides, docked_start_stations, trips_by_type)
+
+## **Deciding on Docked Bikes**
+
+#### My assignment is to compare casual and member behavior to target a digital marketing campaign meant to convert casual riders to members. Since only casual members appear able to use the docked bike type, they account for less than 5% of all rides, and trips on docked bikes are on average significantly longer than rides logged by casual or member riders on other bike types, keeping these observations can only skew my analysis.
+
+#### Based on this assessment, I will remove docked bikes from my final working dataframe and truncate the name of this dataframe for easier use.
+
+    trips <- trips_4 %>%  ## Filtering docked bikes
+      filter(bike_type != "docked_bike") 
+
+#### To complete my data transformation, I will create a final variable that denotes whether a ride occurs on a weekend or workday.
+
+    trips_1 <- trips %>% 
+      mutate(workday_weekend = case_when(
+        weekday == 'Monday' ~ 'workday',
+        weekday == 'Tuesday' ~ 'workday',
+        weekday == 'Wednesday' ~ 'workday',
+        weekday == 'Thursday' ~ 'workday',
+        weekday == 'Friday' ~ 'workday',
+        weekday == 'Saturday' ~ 'weekend',
+        weekday == 'Sunday' ~ 'weekend',
+      ))
+    trips <- trips_1
+    rm(trips_1)
+
+    rm(trips_4)
+
+## **Creating a Station Dataframe**
+
+#### As a final step, I will now create a dataframe that excludes any rides with missing station data. I will use this dataframe for future visualizations and start/end station analysis.
+
+    trips_w_stations <- trips %>% 
+        filter(start_station_name != "" &
+                 end_station_name != ""
+               )
+
+## **Cleaning Review (annual\_trips)**
+
+#### After cleaning our data, our final trips dataframe has 5,559,857 observations, with 323,186 records removed due to trip length shorter than one minute and longer than eight hours, faulty start/end time keeping, and the removal of the docked bike type, which alone accounted for 202,745 removals.
+
+#### Our trips\_w\_stations dataframe saw an additional 1,277,842 observations removed due to a lack of station data. This data frame will only be used to answer questions related to geography and station traffic.
+
+## **9. Data Inspection and Cleaning (chicago\_weather)**
+
+    skim_without_charts(chicago_weather)
+
+<table>
+<caption>Data summary</caption>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Name</td>
+<td style="text-align: left;">chicago_weather</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Number of rows</td>
+<td style="text-align: left;">365</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Number of columns</td>
+<td style="text-align: left;">33</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">_______________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Column type frequency:</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">character</td>
+<td style="text-align: left;">9</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">logical</td>
+<td style="text-align: left;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">numeric</td>
+<td style="text-align: left;">23</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">________________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Group variables</td>
+<td style="text-align: left;">None</td>
+</tr>
+</tbody>
+</table>
+
+Data summary
+
+**Variable type: character**
+
+<table>
+<colgroup>
+<col style="width: 19%" />
+<col style="width: 13%" />
+<col style="width: 19%" />
+<col style="width: 5%" />
+<col style="width: 5%" />
+<col style="width: 8%" />
+<col style="width: 12%" />
+<col style="width: 15%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">min</th>
+<th style="text-align: right;">max</th>
+<th style="text-align: right;">empty</th>
+<th style="text-align: right;">n_unique</th>
+<th style="text-align: right;">whitespace</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">name</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">datetime</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">365</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">preciptype</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">9</td>
+<td style="text-align: right;">221</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">sunrise</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">365</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">sunset</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">365</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">conditions</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">28</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">description</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">26</td>
+<td style="text-align: right;">81</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">icon</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">17</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">stations</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">56</td>
+<td style="text-align: right;">68</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+
+**Variable type: logical**
+
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">mean</th>
+<th style="text-align: left;">count</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">severerisk</td>
+<td style="text-align: right;">365</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">NaN</td>
+<td style="text-align: left;">:</td>
+</tr>
+</tbody>
+</table>
+
+**Variable type: numeric**
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 18%" />
+<col style="width: 10%" />
+<col style="width: 15%" />
+<col style="width: 8%" />
+<col style="width: 6%" />
+<col style="width: 6%" />
+<col style="width: 8%" />
+<col style="width: 7%" />
+<col style="width: 8%" />
+<col style="width: 8%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">mean</th>
+<th style="text-align: right;">sd</th>
+<th style="text-align: right;">p0</th>
+<th style="text-align: right;">p25</th>
+<th style="text-align: right;">p50</th>
+<th style="text-align: right;">p75</th>
+<th style="text-align: right;">p100</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">tempmax</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">61.51</td>
+<td style="text-align: right;">20.97</td>
+<td style="text-align: right;">13.5</td>
+<td style="text-align: right;">43.80</td>
+<td style="text-align: right;">62.3</td>
+<td style="text-align: right;">80.30</td>
+<td style="text-align: right;">100.10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">tempmin</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">46.41</td>
+<td style="text-align: right;">19.74</td>
+<td style="text-align: right;">-4.3</td>
+<td style="text-align: right;">31.70</td>
+<td style="text-align: right;">46.9</td>
+<td style="text-align: right;">64.80</td>
+<td style="text-align: right;">83.10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">temp</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">53.89</td>
+<td style="text-align: right;">20.17</td>
+<td style="text-align: right;">4.4</td>
+<td style="text-align: right;">37.50</td>
+<td style="text-align: right;">54.2</td>
+<td style="text-align: right;">72.50</td>
+<td style="text-align: right;">90.40</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">feelslikemax</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">59.54</td>
+<td style="text-align: right;">24.40</td>
+<td style="text-align: right;">-0.5</td>
+<td style="text-align: right;">37.70</td>
+<td style="text-align: right;">62.3</td>
+<td style="text-align: right;">80.20</td>
+<td style="text-align: right;">106.70</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">feelslikemin</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">42.20</td>
+<td style="text-align: right;">24.20</td>
+<td style="text-align: right;">-16.6</td>
+<td style="text-align: right;">24.10</td>
+<td style="text-align: right;">43.7</td>
+<td style="text-align: right;">64.80</td>
+<td style="text-align: right;">87.40</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">feelslike</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">50.75</td>
+<td style="text-align: right;">24.18</td>
+<td style="text-align: right;">-9.0</td>
+<td style="text-align: right;">31.60</td>
+<td style="text-align: right;">53.6</td>
+<td style="text-align: right;">72.50</td>
+<td style="text-align: right;">94.10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">dew</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">40.21</td>
+<td style="text-align: right;">18.89</td>
+<td style="text-align: right;">-8.3</td>
+<td style="text-align: right;">26.00</td>
+<td style="text-align: right;">41.2</td>
+<td style="text-align: right;">57.40</td>
+<td style="text-align: right;">72.90</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">humidity</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">62.05</td>
+<td style="text-align: right;">11.09</td>
+<td style="text-align: right;">33.0</td>
+<td style="text-align: right;">53.90</td>
+<td style="text-align: right;">61.3</td>
+<td style="text-align: right;">70.00</td>
+<td style="text-align: right;">90.80</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">precip</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">0.09</td>
+<td style="text-align: right;">0.23</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.04</td>
+<td style="text-align: right;">1.82</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">precipprob</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">39.45</td>
+<td style="text-align: right;">48.94</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">100.00</td>
+<td style="text-align: right;">100.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">precipcover</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">9.68</td>
+<td style="text-align: right;">16.61</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">12.50</td>
+<td style="text-align: right;">91.67</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">snow</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">0.08</td>
+<td style="text-align: right;">0.35</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">2.50</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">snowdepth</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: right;">1.36</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">7.80</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">windgust</td>
+<td style="text-align: right;">37</td>
+<td style="text-align: right;">0.9</td>
+<td style="text-align: right;">28.30</td>
+<td style="text-align: right;">7.43</td>
+<td style="text-align: right;">16.1</td>
+<td style="text-align: right;">23.00</td>
+<td style="text-align: right;">27.6</td>
+<td style="text-align: right;">32.20</td>
+<td style="text-align: right;">60.20</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">windspeed</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">16.12</td>
+<td style="text-align: right;">4.50</td>
+<td style="text-align: right;">7.8</td>
+<td style="text-align: right;">13.20</td>
+<td style="text-align: right;">15.4</td>
+<td style="text-align: right;">18.60</td>
+<td style="text-align: right;">35.90</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">winddir</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">190.47</td>
+<td style="text-align: right;">97.78</td>
+<td style="text-align: right;">0.8</td>
+<td style="text-align: right;">102.50</td>
+<td style="text-align: right;">212.2</td>
+<td style="text-align: right;">269.90</td>
+<td style="text-align: right;">359.60</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">sealevelpressure</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">1015.84</td>
+<td style="text-align: right;">6.78</td>
+<td style="text-align: right;">996.5</td>
+<td style="text-align: right;">1011.40</td>
+<td style="text-align: right;">1015.5</td>
+<td style="text-align: right;">1019.80</td>
+<td style="text-align: right;">1035.90</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">cloudcover</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">65.59</td>
+<td style="text-align: right;">25.78</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">44.70</td>
+<td style="text-align: right;">70.4</td>
+<td style="text-align: right;">88.60</td>
+<td style="text-align: right;">100.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">visibility</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">9.36</td>
+<td style="text-align: right;">1.05</td>
+<td style="text-align: right;">4.1</td>
+<td style="text-align: right;">9.30</td>
+<td style="text-align: right;">9.9</td>
+<td style="text-align: right;">9.90</td>
+<td style="text-align: right;">9.90</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">solarradiation</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">134.35</td>
+<td style="text-align: right;">80.08</td>
+<td style="text-align: right;">7.0</td>
+<td style="text-align: right;">66.90</td>
+<td style="text-align: right;">125.1</td>
+<td style="text-align: right;">189.10</td>
+<td style="text-align: right;">354.40</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">solarenergy</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">6.53</td>
+<td style="text-align: right;">4.39</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">2.90</td>
+<td style="text-align: right;">5.7</td>
+<td style="text-align: right;">9.50</td>
+<td style="text-align: right;">19.20</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">uvindex</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">4.30</td>
+<td style="text-align: right;">2.87</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">2.00</td>
+<td style="text-align: right;">4.0</td>
+<td style="text-align: right;">7.00</td>
+<td style="text-align: right;">10.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">moonphase</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">0.50</td>
+<td style="text-align: right;">0.31</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.24</td>
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">1.00</td>
+</tr>
+</tbody>
+</table>
+
+#### An inspection of the chicago\_weather dataset presents two notable, but minor issues.
+
+#### There are 37 instances of missing (NA) windgust data. As a result, I will not use this variable for analysis.
+
+#### The “precipprob” variable appears to have only two values: 0% and 100%. This indicates that probability of precipitation was marked as a binary, with 0% indicating no forecast of rain, and 100% indicating a chance of any amount of rain throughout the day.
+
+#### In light of these findings, I will elect to continue to use the dataset without modification or further cleaning, however I will not use windgust during my evaluation, but instead rely on average daily windspeed (‘windspeed.’) Further, I will use the accumulated precipitation and ignore precipitation probability.
+
+## **9.1 Data Transformation and Grouping**
+
+#### Confident in the data set, I simply needed to cast the ‘datetime’ variable from character to datetime, and then create a calendar week variable.
+
+    chicago_weather_1 <- chicago_weather %>% 
+      mutate(date = as.Date(datetime, format = "%m/%d/%Y")
+      )
+
+    chicago_weather_2 <- chicago_weather_1 %>% 
+      mutate( week = strftime(date, format = "%V")
+              )
+    chicago_weather <- chicago_weather_2      
+    rm(chicago_weather_1, chicago_weather_2)
+
+## **10. Analysis**
+
+#### To complete our business task, we need to answer the following questions:
+
+#### 1. How do casual and member riders use the Cyclistic system differently?
+
+#### 2. Why would a casual rider buy a Cyclstic membership?
+
+#### 3. How can digital marketing be used to target and influence casual riders to become members?
+
+## **10.1 Asking Questions to Answer Our Business Task**
+
+#### To answer the above questions, I will ask the following:
+
+#### (10.2) When do member and casual riders use Cyclistic? Do these patterns suggest different use cases?
+
+#### (10.3) When are casual customers most active in the Cyclistic system (peak season?)
+
+#### (10.4) What environmental factors increase ridership?
+
+#### (10.5) Do different customers prefer classic or electric bikes? Is this demand met?
+
+#### (10.5) Does bike type impact member/casual behavior and performance?
+
+#### (10.7) When are casual riders most active during peak season?
+
+#### (10.7) How does peak season behavior differ from annual norms?
+
+#### (10.8) Does station-to-station data indicate different use patterns for casual and member riders?
+
+#### Are there geographic centers of casual and member activity?
+
+#### Once these questions are answered, we can determine why members purchased subscriptions and create a targeted marketing campaign that demonstrates these benefits to casual riders already familiar with the system, but possibly unaware of the system’s other applications and benefits.
+
+## **10.2 Member/Casual user patterns**
+
+## **10.2a Determining Popular Weekdays**
+
+#### To have the largest return on investment, our marketing campaign will need to take place whenever the largest number of casual riders are using the system. To answer this question, I will start broadly by studying what weekdays are most popular for casual and member customers over the course of a full year.
+
+    trips_by_weekday <- trips %>% 
+      group_by(customer_type,weekday) %>% 
+      summarize(avg_trip_length = mean(trip_length),
+                ride_count = n_distinct(ride_id)
+                )
+
+#### I will now make a quick vizualization to better understand daily ride data over the course of a year:
+
+    viz_trips_by_weekday <- ggplot(data = trips_by_weekday)+
+      geom_col(mapping = aes(x = weekday,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge')+
+      labs(title = "Annual Ride Count By Weekday", 
+           x = "Day of Week", 
+           y = "Number of Rides",
+           )
+    print(viz_trips_by_weekday)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-46-1.png)
+
+## **10.2a Preferred Weekdays**
+
+#### This visualization reveals that casual riders have a clear preference for weekend rides. Casual ridership exceeds member ridership on Saturdays, and nearly meets member ride counts on Sundays.
+
+#### During the work week, member ridership far exceeds casual ridership. Members ride most frequently on Tuesdays, Wednesdays, and Thursdays.
+
+#### During the work week, casual riders ride most frequently on Fridays and Thursdays.
+
+\####[View
+calculations](https://docs.google.com/spreadsheets/d/1oiygqUKx66HrRjI-jp7XppzKFS_bmyHYd9bBtesbuUM/edit?usp=sharing)
+\#### Casual riders take 37.67% of their total weekly rides during the
+weekend, compared to members who take 25.11% of their weekly rides over
+the weekend. \#### Casual riders take 26.99% of their total weekly rides
+on Thursday and Friday, compared to members who take 29.23% of their
+weekly rides during the same period of time.
+
+    rm(trips_by_weekday)
+
+## **10.2b Ride Start Time Analysis: Workdays**
+
+#### Our initial visualization indicates heavy member usage during the work week, and could mean members use the system for business commuting or other task-based uses beyond recreation. In order to investigate this further, I will break out weekend and weekday rides into seperate data frames and observe when rides begin.
+
+    #### Filtering workdays
+
+    trips_workday <- trips %>% 
+      filter(workday_weekend == 'workday')
+
+#### Summarizing workday start hours
+
+    trips_by_starting_hour_workday <- trips_workday %>% 
+      group_by(customer_type,start_hour) %>% 
+      summarize(avg_trip_length = mean(trip_length),
+                ride_count = n_distinct(ride_id)
+      )
+
+#### Visualizing
+
+    viz_starting_hour_workday <- ggplot(data = trips_by_starting_hour_workday)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge'
+                          )+
+      labs(title = "Number of rides initiated by hour, workday",
+           subtitle = "Based on annual trip data",
+           x = "Starting Hour",
+           y = "Number of Rides Initiated")
+    print(viz_starting_hour_workday)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-50-1.png)
+
+    rm(trips_by_starting_hour_workday)
+
+## **10.2b Ride Start Time Analysis: Workdays**
+
+#### Members: Based on our analysis, we see that members use the Cyclistic system significantly more than casual riders in the weekday morning period from 7am through 10:59 am (making up 20.95.47% of their daily rides). Midday rides are also somewhat popular, with 25.13% of all member rides initiated from 11am to 3:59pm. Finally, see a large uptick in rides initiated from 4pm through 7:59pm (making up 35.98% of their daily rides).
+
+#### Casual: Casual riders demonstrate significantly different behavior on weekdays. Casual riders largely forgo the AM rush hour period of 7am through 10:59am, with only 13.03% of casual rides starting during this period. Casual ridership increases from 11am to 3:59pm, when 27.76% of casual rides initiate, and then peaks during the 4pm to 7:59pm period, which makes up 36.50% of their daily rides.
+
+#### These findings could indicate that while some members use the system for morning commutes, there is an increased demand during the PM rush hour, either due to a lower need to arrive to destinations on time, or a desire to travel within a business district after work hours to entertainment and other social activities. We will study this more closely when analyzing trip duration (comparing am to pm trip durations) and station-to-station data.
+
+## **10.2c Ride Start Time Analysis: Weekends**
+
+    trips_weekend <- trips %>% 
+      filter(workday_weekend == 'weekend')
+
+    trips_by_starting_hour_weekend <- trips_weekend %>% 
+      group_by(customer_type,start_hour) %>% 
+      summarize(avg_trip_length = mean(trip_length),
+                ride_count = n_distinct(ride_id)
+      )
+      
+    viz_starting_hour_weekend <- ggplot(data = trips_by_starting_hour_weekend)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge'
+      )+
+      labs(title = "Number of rides initiated by hour, weekend",
+           x = "Starting Hour",
+           y = "Number of Rides Initiated")
+    print(viz_starting_hour_weekend)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-52-1.png)
+
+    rm(trips_by_starting_hour_weekend, trips_weekend)
+
+## **10.2c Ride Start Time Analysis: Weekends**
+
+#### Weekend ride data shows an important shift in rider behavior: casual ridership trends much more closely to member ridership in terms of rides initiated by hour, and in some cases exceeds hourly member ridership.
+
+#### Casual rides make up the majority of system-wide rides from 9pm through 4:59am, as well as from 1pm through 5:59pm.
+
+#### We will need to study supporting data like trip duration and station-to-station behavior, but it does appear that casual riders are using Cyclistic in a largely recreational capacity, or as a way to attend or return from social activities.
+
+#### When reviewing this data, I looked into Chicago’s mass transit system, the L, and found that six of the system’s eight lines close from between 1am and 2am and reopen between 4am and 5am. It is possible that the heavy late-night casual ridership numbers are in part a result of this lack of transportation alternatives.
+
+#### The higher number of member riders using the system from 5am through 12:59pm on weekends could indicate commuting activity for those working weekends, but also points to another factor: weather.
+
+#### Morning temperatures are generally cooler than during the midday and evening. This willingness to ride during less comfortable periods of the day could indicate that members are either more tolerant of the cold, or are active enough cyclists that they own better apparel to offset this discomfort. Both possiblities suggest that members are more experienced cyclists.
+
+## **10.3a Identifying Peak Season**
+
+#### While our start time analysis is helpful, Chicago’s weather likely has a major impact in overall system usage for member and casual riders. In order to study the impact of seasonality on system usage, I will break down ride counts by month, and then drill down to a specific week or band of weeks. Ideally, this will reveal peak casual ridership, which the marketing team can use as a trigger for when to initiate their marketing campaign.
+
+    trips_by_month <- trips %>% 
+      group_by(month, customer_type) %>% 
+      summarize(avg_trip_length = mean(trip_length),
+                ride_count = n_distinct(ride_id)
+      )
+
+#### In order to better visualize the member/casual split, I will now use the mutate command to create a percent breakdown of member versus casual rides.
+
+    trips_by_month_pct <- trips_by_month %>% 
+      mutate(percent_of_rides = ((ride_count/sum(ride_count))*100)
+      )
+
+#### Now to visualize and determine peak months of system usage.
+
+    viz_trips_by_month <- ggplot(data = trips_by_month_pct)+
+      geom_col(mapping = aes(x = month,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge'
+      )+
+      labs(title = "Number of rides per week, segmented by customer type",
+           x = "Month",
+           y = "Ride Count",
+           subtitle = "Avg Member Ride Count: 278,844 (Blue Line),
+           Avg Casual Ride Count: 184,477(Red Line)")+
+      geom_hline(yintercept=278844, linetype="dashed", color = "blue")+
+      geom_hline(yintercept=184477, linetype="dashed", color = "red")
+    print(viz_trips_by_month)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-56-1.png)
+
+## **10.3a Identifying Peak Season**
+
+#### An initial review of this visualization indicates that member activity peaks in August, while casual activity peaks in July. Additionally, member and casual monthly ride counts exceed their monthly averages from May through October.
+
+#### While both groups of customers see decreased ridership from November through April, casual riders show a far more significant drop off in Cyclistic usage when compared to member riders.
+
+#### Monthly member ridership drops an average of 38.48% from November through April, while casual monthly ridership drops by an average of 68.79% during the same period.
+
+#### Based on these observations, it seems likely that members are generally more tolerant of poor or cold weather, while casual riders are more fair-weather riders.
+
+## **10.3b Identifying Peak Season**
+
+#### While the raw ride count by month indicates July is the height of casual customer activity, I also wish to identify the month where casual riders make up the highest percentage of overall rides compared to members using the “percent\_of\_rides” statistic I calculated in 10.3a.
+
+    viz_trips_by_month_pct <- ggplot(data = trips_by_month_pct)+
+      geom_col(mapping = aes(x = month,
+                             y = percent_of_rides,
+                             fill = customer_type),
+               position = 'dodge'
+      )+
+      labs(title = "Percentage of rides taken by customer type",
+           caption = "Dashed lines indicate average ride ratio",
+           x = "Month",
+           y = "Percent of ridership")+
+      geom_hline(yintercept= 60.18, linetype="dashed", color = "blue") +
+      geom_hline(yintercept= 39.82, linetype="dashed", color = "red")
+    print(viz_trips_by_month_pct)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-57-1.png)
+
+    rm(trips_by_month, trips_by_month_pct)
+
+## **10.3b Comparing Casual/Member Split By Month**
+
+#### The above visualization confirms that July is our prime time for targetting casual riders. Based on our data, casual riders make up 47.31% of all rides in July. Over the course of a full year, casual riders only make up 39.82% of all trips.
+
+## **10.3c Isolating Peak Weeks**
+
+#### Now that we know July is the peak month for casual riders, we will drill down to the calendar week level to ensure we activate the campaign when casual riders make up the largest percentage of overall rides. The following dataframe includes the calendar weeks of July (calendar weeks 26 - 30), as well as the last three weeks of June and first two weeks of August to ensure accurate findings.
+
+    trips_by_peak_week <- trips %>% 
+      filter(week >= 23 & week <= 32) %>% 
+      group_by(week, customer_type) %>% 
+      summarize(avg_trip_length = mean(trip_length),
+                ride_count = n_distinct(ride_id)
+      ) %>% 
+        mutate(percent_of_rides = ((ride_count/sum(ride_count))*100)
+        )
+
+    #### Visualizing raw weekly count of casual/member rides
+
+    viz_trips_by_peak_week_raw_count <- ggplot(trips_by_peak_week)+
+      geom_col(mapping = aes(x = week,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge')+
+      labs(title = "Raw count of rides taken by member and casual customers",
+           subtitle = "Data segmented by calendar week",
+           x = "Calendar week",
+           y = "Raw ride count")
+    print(viz_trips_by_peak_week_raw_count)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-59-1.png)
+
+    #### Visualizing the ratio of casual to member rides
+
+    viz_trips_by_peak_week <- ggplot(trips_by_peak_week)+
+      geom_col(mapping = aes(x = week,
+                             y = percent_of_rides,
+                             fill = customer_type),
+               position = 'dodge')+
+      labs(title = "Percentage of member and casual rides",
+           subtitle = "Data segmented by calendar week",
+           x = "Calendar week",
+           y = "Percent of total rides")+
+      coord_cartesian(ylim=c(30,60))
+    print(viz_trips_by_peak_week)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-59-2.png)
+
+## **10.3c July in Detail**
+
+#### The above visualizations present a clearer picture at the calendar-week-level. Although casual ride counts peak in July (week 30), ride counts are nearly as high, but more consistently so, during calendar weeks 24 through 27 (late June and early July). This is backed by the second visualization, which shows higher percentages of casual rides during weeks 24 through 27.
+
+#### Based on these observations, we now know that **casual riders make up the largest percentage of the total rider population during weeks 24 through 27**, and the digital marketing team should target casual riders during this period. Further, this will be the primary period of time we will study when reviewing member/casual behavior later in the analysis.
+
+## **10.4 How Weather Dictates Peak Season**
+
+#### Rather than recommending the digital marketing team initiate their campaign during weeks 24 and 27, I want to understand what factors made these weeks so popular among casual riders. Based on our analysis to this point, I have a hypothesis that casual riders are more sensitive to weather conditions, so the following analysis will test that theory.
+
+    chicago_weather_by_week_filtered <- chicago_weather %>%  ## filtering weather data to relevant time period and condensing records into weekly averages
+      group_by(week) %>% 
+      summarize(mean_temp = mean(temp),
+                mean_humidity = mean(humidity),
+                sum_precip = sum(precip),           ## Using sum of rainfall in lieu of average to avoid one day skewing results for the week
+                mean_wind_speed = mean(windspeed)) %>% 
+                 filter(week >= 23 & week <= 32)
+
+## **10.4a Temperature by week**
+
+    viz_weather_week_temp <- ggplot(data = chicago_weather_by_week_filtered)+
+      geom_col(mapping = aes(x = week,
+                             y = mean_temp))+
+      labs(title = "Average Temperature by Week",
+           subtitle = "Based on weather data from weeks 23 through 32",
+           x = "Calendar Week",
+           y = "Average Temperature by Week (fahrenheit)")
+    print(viz_weather_week_temp)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-61-1.png)
+
+## **10.4a Temperature and Peak Season**
+
+#### From week 23 to 24, we see an increase in weekly average temperatures of 13.60 degrees from 66.09 to 79.69 degrees, coinciding with the uptick in casual ridership in week 24. Temperatures then remain around 80 degrees for the remainder of our period of study.
+
+#### This bump in temperature could be the inciting incident for peak ridership, but further evaluation is required. I will now run a pearson correlation test to determine the strength of this correlation.
+
+    trips_by_peak_week_casual <- trips_by_peak_week %>% 
+    filter(customer_type == 'casual')
+
+    trips_by_peak_week_casual_1 <- bind_rows(trips_by_peak_week_casual,
+                                             right_join(chicago_weather_by_week_filtered,
+                                                        trips_by_peak_week_casual,by="week"))
+
+    trips_by_peak_week_casual_2 <- na.omit(trips_by_peak_week_casual_1)
+
+    weather_correlation_temp <- cor(trips_by_peak_week_casual_2$ride_count, 
+                                    trips_by_peak_week_casual_2$mean_temp, 
+                                    method = 'pearson')
+    print(weather_correlation_temp)
+
+    ## [1] 0.7097007
+
+#### Based on this test, it appears that temperature has a **strong** correlation to casual ridership of 0.71.
+
+## **10.4b Wind Speed by Week**
+
+    viz_weather_week_wind_speed <- ggplot(data = chicago_weather_by_week_filtered)+
+      geom_col(mapping = aes(x = week,
+                             y = mean_wind_speed))+
+      labs(title = "Average Wind Speed by Week",
+           subtitle = "Based on weather data from weeks 23 through 32",
+           x = "Calendar Week",
+           y = "Average Wind Speed by Week (mph)")
+    print(viz_weather_week_wind_speed)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-63-1.png)
+
+#### **10.4b Wind Speed and Peak Season**
+
+#### Wind speed varies widely over our period of study, but there does not appear to be a strong correlation between wind speed and peak casual ridership. Average windspeed notably increased from week 23 to 24 (the second highest week for casual ridership), but decreased notably from week 29 to 30 (the highest week for casual ridership).
+
+    weather_correlation_wind_speed <- cor(trips_by_peak_week_casual_2$ride_count, 
+                                          trips_by_peak_week_casual_2$mean_wind_speed, 
+                                          method = 'pearson')
+    print(weather_correlation_wind_speed)
+
+    ## [1] 0.2602383
+
+#### Based on this test, wind speed has a **low** correlation to casual ridership of 0.26.
+
+## **10.4c Average Percent Humidity by Week**
+
+    viz_weather_week_humidity <- ggplot(data = chicago_weather_by_week_filtered)+
+      geom_col(mapping = aes(x = week,
+                             y = mean_humidity))+
+      labs(title = "Average Percent Humidity by Week",
+           subtitle = "Based on weather data from weeks 23 through 32",
+           x = "Calendar Week",
+           y = "Average Percent Humidity")
+    print(viz_weather_week_humidity)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-65-1.png)
+
+## **10.4c Average Percent Humidity and Peak Season**
+
+#### This presents a key finding: humidity drops by 18.23% from week 23 to 24, and increases by 20.10% from week 26 to 27 and remains high. It is likely that this increase in discomfort disuaded casual riders from being as active with Cyclistic over the course of a sweaty week 27.
+
+#### These findings are backed by the average humidity of week 30 (57.43%). This is the lowest average humidity from weeks 27 through 32 and coincides with peak casual ridership.
+
+    weather_correlation_humidity <- cor(trips_by_peak_week_casual_2$ride_count, 
+                                        trips_by_peak_week_casual_2$mean_humidity, 
+                                        method = 'pearson')
+    print(weather_correlation_humidity)
+
+    ## [1] -0.7361105
+
+#### Based on this test, humidity has a **strong** inverse correlation to casual ridership of -0.74
+
+## **10.4d Total Rainfall by Week**
+
+    viz_weather_week_precip_total <- ggplot(data = chicago_weather_by_week_filtered)+
+      geom_col(mapping = aes(x = week,
+                             y = sum_precip))+
+      labs(title = "Total Precipitation by Week",
+           subtitle = "Based on weather data from weeks 23 through 32",
+           x = "Calendar Week",
+           y = "Total Precipitation by Week (Inches)")
+    print(viz_weather_week_precip_total)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-67-1.png)
+
+## **10.4d Total Rainfall and Peak Season**
+
+#### Total rainfall presents somewhat confounding findings. Rainfall fell below 0.5 inches during weeks 24 through 26, but spiked in weeks 27 through 29 before falling below 0.5 inches for the remainder of our period of study.
+
+    weather_correlation_precip <- cor(trips_by_peak_week_casual_2$ride_count, 
+                                      trips_by_peak_week_casual_2$sum_precip, 
+                                      method = 'pearson')
+    print(weather_correlation_precip)
+
+    ## [1] -0.2325573
+
+#### Based on this test, actual rainfall has a **low** inverse correlation to casual ridership of -0.23. That said, the decrease in rainfall from week 23 to 24 may have been part of the factors that triggered the beginning of peak season. Rather than using this as a hard rule for peak season, I would consider rainfall below 0.5 inches to be a secondary or tertiary consideration when deciding to initiate the marketing team’s campaign.
+
+    rm(trips_by_peak_week, 
+       weather_correlation_precip, 
+       weather_correlation_wind_speed, 
+       weather_correlation_temp, 
+       weather_correlation_humidity, 
+       trips_by_peak_week_casual, 
+       trips_by_peak_week_casual_1, 
+       trips_by_peak_week_casual_2, 
+       chicago_weather_by_week_filtered)
+
+## **10.4e Implications of Weather Study**
+
+#### Our study of weather patterns and casual ridership indicates that there are several triggers for casual riders to hit their peak season:
+
+#### 1) Casual ridership increases when temperatures reach about 80 degrees, especially if there has been a double-digit increase in temperature from the prior week.
+
+#### 2) Casual ridership increases when humidity is low, espescially when humidity levels sit below the annual average of 62.5%.
+
+#### 3) Rainfall changes so much from week to week that it is difficult to draw a direct line from increased rain to lower casual ridership, however weeks with rainfall below 0.5 inches do see a slight increase in casual activity.
+
+## **10.5 Evaluating Casual and Member Behavior**
+
+#### Now that we know when to target casual members for the membership campaign, we will need to evaluate and compare member and casual rider behavior. These findings will help us flesh out some of our earlier observations and give the marketing team talking points they can use when developing their campaign.
+
+#### When evaluating behavior, I will focus on trip duration, bike preference (electric and classic), how bike type impacts trip duration, and how day and time of day impacts these characteristics.
+
+#### I will begin my analysis using the full year’s worth of data for a high-level understanding of customer behvior, then drill down to weeks 24 through 27 to ensure our marketing efforts are honed to the finest possible point.
+
+## **10.5a Bike Type, Trip Duration, and Customer Split**
+
+#### To begin, we will first establish baseline stats for member and casual behavior over the course of a year.
+
+#### The dataframe below includes:
+
+#### 1) Average trip duration for each customer/bike type combination,
+
+#### 2) Raw count of rides taken by each customer/bike type combination,
+
+#### 3) Percentage of rides on classic/electric bikes within each customer type
+
+#### 4) Number of rides by each customer/bike type as a percentage of total annual rides
+
+    basic_stats <- trips %>% 
+      group_by(customer_type, bike_type) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id)) %>%
+      mutate(classic_electric_split = ((ride_count/sum(ride_count))*100),
+             pct_of_total_rides = ((ride_count/5559857)*100)
+      )
+    view(basic_stats)
+
+## **10.5b Bike Type Preference**
+
+    viz_bike_type_preference <- ggplot(data = basic_stats)+
+      geom_col(mapping = aes(x = customer_type,
+                             y = classic_electric_split,
+                             fill = bike_type),
+               position = 'dodge')+
+      labs(title = "Bike Type Preference by Customer Type",
+           subtitle = "Based on annual trip data",
+           caption = "Members show preference for classic bikes, 
+           casual riders show preference for electric bikes",
+           x = "Customer type",
+           y = "Percent of total rides (within customer type)"
+           )
+    print(viz_bike_type_preference)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-71-1.png)
+
+## **10.5b Bike Type Preference**
+
+#### The above visualization shows member riders used classic bikes for 54.87% of their rides and electric bikes for the other 45.13% of their trips.
+
+#### We see a near-perfect inverse for casual riders, who used classic bikes 45.81% of the time and electric bikes for the remaining 54.19% of their rides.
+
+## **10.5c Trip Duration by Customer and Bike Type**
+
+#### The following visualization shows how bike type impacts average ride duration for each customer type.
+
+    viz_trip_duration_by_bike_type <- ggplot(data = basic_stats)+
+      geom_col(mapping = aes(x = customer_type,
+                             y = mean_trip_duration,
+                             fill = bike_type),
+               position = 'dodge')+
+      labs(title = "Trip Duration and Bike Type",
+           subtitle = "Based on annual trip data",
+           caption = "Electric bikes lower casual trip duration by 25.58%,
+           Electric bikes lower member trip duration by 8.41%",
+           x = "Customer Type",
+           y = "Mean Trip Duration (seconds)")
+    print(viz_trip_duration_by_bike_type)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-72-1.png)
+
+## **10.5c Trip Duration by Customer and Bike Type**
+
+#### The above visualization shows a key difference in member/casual behavior:
+
+#### Members only lower their average trip duration by 8.41% when using an electric bike instead of a classic.
+
+#### Casual riders seem to benefit much more from the electric boost, lowering average trip duration by 25.58% when using an electric bike.
+
+    rm(basic_stats)
+
+## **10.5d Comparing Annual Trends to Peak Season**
+
+#### Because we are planning a timed marketing initiative, understanding customer behavior during peak season (identified in 10.3c as weeks 24 through 27) is critical to our success. We will now filter for those calendar weeks and run a similar analysis.
+
+    peak_season_trips <- trips %>% 
+      filter(week >= 24 & week <= 27)
+
+    peak_basic_stats <- trips %>% 
+      group_by(customer_type, bike_type) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id)) %>%
+      mutate(classic_electric_split = ((ride_count/sum(ride_count))*100),
+             pct_of_total_rides = ((ride_count/5559857)*100)
+      )
+
+## **10.5e Bike Preference During Peak Season**
+
+    viz_bike_type_preference_peak <- ggplot(data = peak_basic_stats)+
+      geom_col(mapping = aes(x = customer_type,
+                             y = classic_electric_split,
+                             fill = bike_type),
+               position = 'dodge')+
+      labs(title = "Bike Type Preference by Customer Type",
+           subtitle = "Based on weeks 24 through 27",
+           caption = "Peak season shows increased use of classic bikes among casual and member riders",
+           x = "Customer type",
+           y = "Percent of total rides (within customer type)"
+      )
+    print(viz_bike_type_preference_peak)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-75-1.png)
+
+## **10.5e Bike Preference During Peak Season**
+
+#### Based on the above visualization, both cohorts of customers show an increased use of classic bikes during peak season.
+
+#### During peak season, classic bikes make up 48.11% of casual rides (a 2.3% increase from annual averages).
+
+#### During peak season, classic bikes make up 57.16% of member rides (a 2.29% increase from annual averages).
+
+#### Two factors are likely behind this increased use of classic bikes. First, warmer, less humid weather makes these bikes more appealing for casual users. Second, the increased overall use of the Cyclistic system during peak season means the fleet’s electric bikes are in higher demand, and thus more difficult to acquire for any individual customer.
+
+## **10.5f Trip Duration During Peak Season Based on Bike Type**
+
+    viz_trip_duration_by_bike_type_peak <- ggplot(data = peak_basic_stats)+
+      geom_col(mapping = aes(x = customer_type,
+                             y = mean_trip_duration,
+                             fill = bike_type),
+               position = 'dodge')+
+      labs(title = "Trip Duration and Bike Type",
+           subtitle = "Based on weeks 24 through 27",
+           caption = "Electric bikes lower casual trip duration by 23.29%,
+           Electric bikes lower member trip duration by 10.23%",
+           x = "Customer Type",
+           y = "Mean Trip Duration (seconds)")
+    print(viz_trip_duration_by_bike_type_peak)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-76-1.png)
+
+## **10.5f Trip Duration During Peak Season Based on Bike Type**
+
+#### The above visualization shows that electric bikes have a slightly decreased impact on casual trip duration compared to annual averages, while they have a slightly larger impact on member trip duration.
+
+#### Given that both cohorts see a trip duration variance of roughly 2% during peak season, this change is likely not significant to our analysis.
+
+## **10.5g Average Speed During Optimal Weather**
+
+#### Station-to-station activity will be reviewed in detail later, but this data can be used now to make broad observations about the average speed of casual and member riders when using classic and electric bikes.
+
+#### The commands below calculate the distance between start and end stations for each ride taking place from May to October (when weather conditions are least likely to impact speed/rider comfort) and then uses average trip length to establish miles-per-hour.
+
+#### **Note** that the “distHaversine” command assumes no obstacles or pauses for traffic signals, and thus can only be used to determine the relative speed of each customer/bike combination. Additionally, trips that start and end at the same station are not used for this study, as there is no observable distance to calculate.
+
+    may_to_october_behavior <- trips_w_stations %>% 
+      filter(month == 'May'|
+               month == 'June'|
+               month == 'July'|
+               month == 'August'|
+               month == 'September'|
+               month == 'October') %>% 
+      rowwise() %>% 
+      mutate(trip_distance = distHaversine(c(start_lng, start_lat), c(end_lng, end_lat), 
+                                           r=6378137)) %>% 
+      filter(trip_distance > 0) %>% 
+      group_by(customer_type, bike_type) %>% 
+      summarize(mean_trip_length = mean(trip_length),
+                mean_distance_travelled_m = mean(trip_distance),
+                ride_count = n_distinct(ride_id)) %>% 
+      mutate(avg_mph = (mean_distance_travelled_m/mean_trip_length)*2.2369)
+
+## **10.5g Visualizing Average Speed During Optimal Weather**
+
+    viz_customer_speed <- ggplot(data = may_to_october_behavior)+
+      geom_col(mapping = aes(x = customer_type,
+                             y = avg_mph,
+                             fill = bike_type),
+               position = 'dodge')+
+      labs(title = "Average Point-to-Point Speed",
+           subtitle = "Based on May to October Station-to-Station data",
+           x = "Customer Type",
+           y = "Miles Per Hour",
+           caption = "Note: Above visualization does not consider round trips")
+    print(viz_customer_speed)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-78-1.png)
+
+## **10.5g Interpreting Average Speed**
+
+#### Casual customers on electric bikes move 24.66% faster than those using classic bikes, while members see a 30.07% increase in the same scenario.
+
+#### Members on classic bikes move 50.93% faster than casual customers on classic bikes, and move 57.47% faster than casual customers when both are using electric bikes.
+
+#### These findings suggest two possibilities: this can reinforce the theory that members are generally more adept cyclists than casual riders, or it could suggest different use cases between rider types.
+
+#### Point-to-point member rides for purely transportation purposes are likely to be faster and more direct, compared to casual recreational rides that may take less optimal paths to reach their destination.
+
+## **10.5h Implications of Casual/Member Behavior**
+
+#### The large change in trip duration for casual riders switching from classic to electric bikes, combined with their lower average travel speed, preference for electric bikes, and previously-shown sensitivity to poor weather suggest casual riders are generally less experienced cyclists than members.
+
+#### This demonstrable difference in skill and/or experience is a key takeaway we will share with our marketing team, as they can craft the campaign to approach novice cyclists
+
+## **10.6 Understanding Peak Season Behavior**
+
+## **10.6a Comparing Rider Behavior During Weekends and Rush Hour**
+
+#### While we have a good grasp of the basic differences between casual and member riders, we now need to apply our behavioral analysis to three key times in the week highlighted in section 10.2: weekend rides, which are most popular amongst casual riders, and am/pm commutes, which appear to be the most common use case for member riders.
+
+#### By understanding the behavior of customers during this time, we can better understand how to bridge the gap between customer types and convert casual riders into members.
+
+#### To make our analysis more meaningful to the business task, the following analysis will drop annual ride data and instead focus on calendar weeks 24 through 27.
+
+    #### Seperating weekend/workday rides into distinct dataframes from peak_season_trips
+    peak_season_weekend <- peak_season_trips %>%
+      filter(workday_weekend == 'weekend')
+      
+    peak_season_workday <- peak_season_trips %>% 
+      filter(workday_weekend == 'workday')
+
+#### With these peak weeks isolated, I will now group by bike type, customer type, and start hour.
+
+    ## Workday
+    peak_season_workday_grouped <- peak_season_workday %>% 
+      group_by(customer_type, start_hour, bike_type) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id)) %>%
+      mutate(percent_of_rides = ((ride_count/sum(ride_count))*100)
+      )
+
+    ## Weekend
+    peak_season_weekend_grouped <- peak_season_weekend %>% 
+      group_by(customer_type, start_hour, bike_type) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id)) %>%
+      mutate(percent_of_rides = ((ride_count/sum(ride_count))*100)
+      )
+    ## AM Rush Hour Detail
+    peak_season_workday_grouped_am_commute <- peak_season_workday %>%
+      filter(start_hour >= 7 & start_hour <= 10) %>% 
+      group_by(customer_type, start_hour, bike_type) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id)) %>%
+      mutate(percent_of_rides = ((ride_count/sum(ride_count))*100)
+      )
+    ## PM Rush Hour Detail
+    peak_season_workday_grouped_pm_commute <- peak_season_workday %>%
+      filter(start_hour >= 16 & start_hour <= 19) %>% 
+      group_by(customer_type, start_hour, bike_type) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id)) %>%
+      mutate(percent_of_rides = ((ride_count/sum(ride_count))*100)
+      )
+
+## **10.6b Peak Season Workday Start Times Vs Annual Workday Start Times**
+
+#### We selected calendar weeks 24 through 27 as our peak season due to the increased percentage of casual riders using the Cyclistic system. The following visualization presents workday start times for casual and member riders for comparison against annual start times established in section 10.2.
+
+    viz_peak_season_workday_start_hour <- ggplot(data = peak_season_workday_grouped)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge')+
+        labs(title = "Peak Season Workday Ride Count by Starting Hour",
+           subtitle = "Based on trip data from weeks 24 through 27",
+           x = "Starting hour",
+           y = "Ride Count")
+
+    print(ggarrange(viz_starting_hour_workday, 
+                    viz_peak_season_workday_start_hour + 
+                      rremove("x.text"), 
+              labels = c('A', 'B'),
+              common.legend = TRUE, legend = "bottom"))
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-81-1.png)
+
+## **10.6b Comparing Peak Season and Annual Workday Start Hours**
+
+#### The above visualization allow us to calculate two key observations:
+
+#### 1) The percentage of casual rides initiated by hour compared to members (referred to below as “**customer split**.”)
+
+#### 2) The proportion of casual rides initiated by hour as a percentage of total casual rides during the workday (referred to below as “**daily split**.”)
+
+#### Note: The following spreadsheet was used to calculate our findings:
+
+#### [View calculations here](https://docs.google.com/spreadsheets/d/15j3CX27zZo-HdaUXQkPM4NaWsqQzzYZOsoB3XdXXxls/edit?usp=sharing)
+
+## **7am to 10:59am:**
+
+#### **Customer Split**: Casual riders make up 32.22% of the system’s rides during this period, compared to an annual average of 25.52% for the same period of time during weekdays.
+
+#### **Daily Split**: This period of time only accounts for 11.93% of all weekday casual rides in peak season, compared to the annual average of 13.03%.
+
+## **11am to 3:59pm:**
+
+#### **Customer Split**: Casual riders make up 47.31% of the system’s rides during this period, compared to the annual average of 37.82%.
+
+#### **Daily Split**: This period accounts for 27.43% of all weekday casual rides, compared to an annual average of 27.76%, indicating no major change in behavior.
+
+## **4pm to 7:59pm:**
+
+#### **Customer Split**: Casual riders make up 43.73% of the system’s rides during this time period, compared to an annual average of 35.84%.
+
+#### **Daily Split**: This period accounts for 35.74% of all weekday casual rides, compared to an annual average of 36.50%.
+
+## **8pm to 11:59pm:**
+
+#### **Customer Split**: Casual riders make up 51.09% of the system’s rides during this time period, compared to an annual average of 44.05%.
+
+#### **Daily Split**: This period accounts for 19.43% of all weekday casual rides, compared to an annual average of 17.10%
+
+## **Midnight to 6:59am:**
+
+#### **Customer Split**: Casual riders initiate 41.04% of the system’s rides during this time period, compared to an annual average of 33.98.05%.
+
+#### **Daily Split**: This time frame accounts for 5.48% of all casual rides taken daily during peak season, compared to an annual average of 5.60%
+
+## **10.6c Comparing Peak Season and Annual Weekend Start Hours**
+
+#### Weekends are a lower priority for this study, but should be observed for any notable changes in behavior before advancing.
+
+    viz_peak_season_weekend_start_hour <- ggplot(data = peak_season_weekend_grouped)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge')+
+      labs(title = "Peak Season Weekend Ride Count by Starting Hour",
+           subtitle = "Based on trip data from weeks 24 through 27",
+           x = "Starting hour",
+           y = "Ride Count")
+
+    print(ggarrange(viz_starting_hour_weekend, 
+                    viz_peak_season_weekend_start_hour + 
+                      rremove("x.text"), 
+              labels = c('A', 'B'),
+              common.legend = TRUE, legend = "bottom"))
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-82-1.png)
+
+## **10.6c Comparing Peak Season Weekends to Annual Weekend Averages**
+
+#### [View calculations here](https://docs.google.com/spreadsheets/d/1n-NvxlH4g2wQRDejBgVTpgTIb12vZje4nmEIprN24LM/edit?usp=sharing)
+
+#### First, We see a marked increase in casual riders as a percentage of overall rides by hour. During peak season, hourly casual ridership increases by 5.33% compared to the annual average.
+
+#### This is a smaller increase in casual ridership than we see during peak season workdays, but that bodes well, as the workday commute use-case appears to be Cyclistic’s best avenue for converting casual riders into members.
+
+#### Second, we see that casual ride counts exceeds member ride counts at almost every hour during peak season weekends.
+
+#### During peak season weekends, members only make up a majority of rides from 5am through 9am. When looking at annual ride counts, members typically make up the majority of weekend rides from 5am through 12pm as well as from 6pm through 8pm. These two periods of high member ridership suggest weekend commuting behavior.
+
+## **10.6d Interpreting Peak-to-Annual Findings**
+
+#### A peak-to-annual comparison of ride start times tells us casual ridership increases during peak weekends and workdays, with workdays seeing a larger overall increase when compared to annual averages.
+
+#### During peak weekdays, we see the casual customer split increase across all time frames by an average of 8.21%.
+
+#### The AM commute period increases the least, at 6.71%, and the midday (11am - 3:59pm) period increases the most at 9.49%. The PM Commute period sees casual ridership increase by 7.53% compared to annual averages.
+
+#### **These findings show that casual customers are more open to midday and early evening (pm commute) rides during peak season. As a result, we will need to create a digital marketing campaign that capitalizes on this trend and in turn encourages casual ridership the morning after an evening Cyclistic ride.**
+
+## **10.6e Finding Optimal Workdays**
+
+## **AM Commutes (7am - 10:59am)**
+
+#### Digital marketing campaigns rely heavily on timing to meet their objectives. As a result, I created a dataframe and visualization to inspect ride counts during peak-season AM and PM commutes.
+
+    ##AM Commute Details
+    peak_season_workday_am_commute_by_day <- peak_season_workday %>%
+      filter(start_hour >= 7 & start_hour <= 10) %>% 
+      group_by(customer_type, weekday) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id))
+
+
+
+    viz_am_trips_by_weekday <- ggplot(data = peak_season_workday_am_commute_by_day)+
+      geom_col(mapping = aes(x = weekday,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge')+
+      labs(title = "7AM - 10:59AM Commute Ride Count, Peak Season",
+           subtitle = "Peak Season Daily Avg Member Ride Count: 10404 (Blue Line),
+           Peak Season Daily Avg Casual Ride Count: 4946 (Red Line)",
+           x = "Day of Week", 
+           y = "Number of Rides",
+      )+
+       geom_hline(yintercept= 10404, linetype="dashed", color = "blue")+
+      geom_hline(yintercept= 4946, linetype="dashed", color = "red")
+
+    print(viz_am_trips_by_weekday)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-83-1.png)
+
+#### [View AM calculations here](https://docs.google.com/spreadsheets/d/17YaY4-D6nbjZYBwQd_-fZJuNd4zPcQ7dCdJKd_xnPmY/edit?usp=sharing)
+
+## **AM Commutes (7am - 10:59am)**
+
+#### Casual customers initiate an average of 4946 rides a day during this period.
+
+#### Friday mornings are most popular (7.94% above average), followed by Monday (2.98% above average), and Thursday (0.27% below average).
+
+#### Members initiate an average of 10404 rides during this period.
+
+#### Thursday mornings are most popular (9.67% above average), followed by Wednesday (6.98% above average), and Tuesday (6.74% above average)
+
+#### Monday mornings are least popular among members (13.89% below average) and Wednesday mornings are least popular among casual riders (7.79% below average.)
+
+## **PM Commutes (4pm - 7:59pm)**
+
+    ##PM Commute Details
+    peak_season_workday_pm_commute_by_day <- peak_season_workday %>%
+      filter(start_hour >= 16 & start_hour <= 19) %>% 
+      group_by(customer_type, weekday) %>% 
+      summarize(mean_trip_duration = mean(trip_length),
+                ride_count = n_distinct(ride_id))
+
+
+
+    viz_pm_trips_by_weekday <- ggplot(data = peak_season_workday_pm_commute_by_day)+
+      geom_col(mapping = aes(x = weekday,
+                             y = ride_count,
+                             fill = customer_type),
+               position = 'dodge')+
+      labs(title = "4PM-7:59PM Commute Ride Count, Peak Season",
+           subtitle = "Peak Season Daily Avg Member Ride Count: 19348 (Blue Line),
+           Peak Season Daily Avg Casual Ride Count: 14820 (Red Line)",
+           x = "Day of Week", 
+           y = "Number of Rides",
+      )+
+       geom_hline(yintercept= 19348, linetype="dashed", color = "blue")+
+      geom_hline(yintercept= 14820, linetype="dashed", color = "red")
+
+    print(viz_pm_trips_by_weekday)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-84-1.png)
+
+#### \[View PM Calculations here\] (<https://docs.google.com/spreadsheets/d/1jeHPeFHj-CDCpMT-jTYfpbKqKHBdYsWsAITMRoXfR0A/edit?usp=sharing>)
+
+## **PM Commutes (4pm - 7:59pm)**
+
+#### Casual customers initiate a daily average of 14820 rides during this period.
+
+#### Thursday nights are most popular (11.72% above average), followed by Friday nights (9.69% above average), and Wednesday nights (3.60% above average.)
+
+#### Members initiate an average of 19348 rides during this period.
+
+#### Wednesday nights are most popular (12.80% above average), followed by Thursday nights (10.45% above average), and Tuesday nights (2.41% above average.)
+
+## **10.6e Interpreting Peak Workday Commuter Habits**
+
+#### Subscription services like Cyclistic depend on creating repeat behavior, where using the service becomes a habit.
+
+#### To that end, the visualizations presents a possible promotion concept: offering casual customers who use Cyclistic on Thursday evenings a free pass for a ride on Friday morning.
+
+#### This strategy encourages repeat behavior from Thursday night into Friday morning, encouraging repeat use in a short span of time to artificially create a pattern of repeat use. Further, this will encourage casual ridership during the AM commute period, where we see the least casual ridership growth during peak season.
+
+## **10.7 Comparing Casual and Member Trip Durations During Peak Season**
+
+#### Before looking at station-to-station data, we will review trip durations during the peak season weekday AM commute period (7am - 10:59) and the peak season weekday PM commute period (4pm - 7:59pm.) This review may give us better insights into how casual and member riders use the system during these key time periods.
+
+## **10.7a Baseline Trip Duration (AM)**
+
+#### The following dataframe provides baseline trip durations for the AM commute period we will compare against peak season.
+
+    ## AM Baseline
+    annual_workday_duration_am <- trips_workday %>%
+    filter(start_hour >= 7 & start_hour <= 10) %>%
+      group_by(customer_type, bike_type) %>% 
+      summarize(mean_duration = mean(trip_length))
+    view(annual_workday_duration_am)
+
+## **10.7a Baseline Trip Duration (AM)**
+
+#### Casual riders have a baseline trip duration of 20 minutes and 56 seconds (1256 seconds) on classic bikes and a baseline trip duration of 14 minutes and 38 seconds (878 seconds) on electric bikes.
+
+#### Casual electric rides are on average 30.13% shorter than casual classic bike rides.
+
+#### Members have a baseline trip duration of 12 minutes (720 seconds) on classic bikes, and a baseline trip duration of 10 minutes and 44 seconds (644 seconds) on electric bikes.
+
+#### Member electric rides are on average 10.65% shorter than member classic bike rides.
+
+## **10.7b Peak Season AM Commute Duration**
+
+    viz_peak_season_workday_duration_am <- ggplot(data = peak_season_workday_grouped_am_commute)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = (mean_trip_duration/60),
+                             fill = customer_type),
+               position = 'dodge')+
+      facet_wrap(~bike_type)+
+      labs(title = "Peak Season AM Commute Trip Durations",
+           subtitle = "Based on trip data from weeks 24 through 27",
+           x = "Starting Hour",
+           y = "Average Trip Duration (Minutes)")
+
+    print(viz_peak_season_workday_duration_am)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-86-1.png)
+
+## **10.7b Peak Season AM Commute Duration**
+
+#### The above visualization shows consistent ride durations for members throughout the AM period, regardless of bike type or start hour.
+
+#### Casual riders show significantly longer riders from 9am through 10:59am, regardless of bike type.
+
+## **10.7c Inspecting AM Classic Casual Classic Trip Duration Variance**
+
+#### The change in casual ride duration after 9am is notable. The following filtered dataframes and visualizations display the variance in trip duration from annual AM averages.
+
+    classic_casual_workday_am_peak <- peak_season_workday %>% 
+      filter(customer_type == 'casual' & bike_type == 'classic_bike') %>% 
+      filter(start_hour >= 7 & start_hour <= 10) %>% 
+      group_by(start_hour) %>% 
+      summarize(mean_trip_duration = mean(trip_length)) %>% 
+      mutate(percent_variance = ((mean_trip_duration - 1256.3647)/1256.3647)*100)
+
+    viz_am_casual_classic_variance <- ggplot(data = classic_casual_workday_am_peak)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = percent_variance
+      ))+
+      labs(title = 'Trip Duration Variance for Casual/Classic AM Commutes',
+           subtitle = 'Comparing actual trip duration versus annual workday averages',
+           x = 'Starting Hour',
+           y = 'Percent variance',
+           caption = 'Average casual classic workday duration is 1256 seconds')
+
+    print(viz_am_casual_classic_variance)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-88-1.png)
+
+## **10.7c Inspecting AM Classic Casual Trip Duration Variance**
+
+#### The above visualization indicates that casual/classic rides from 7am to 8:59am are significantly shorter than annual AM averages (22.50% shorter from 7am to 7:59am and 14.05% shorter from 8am to 8:59am). Those variances invert from 9am to 10:59am (22.21% longer from 9am to 9:59am and 40.07% longer from 10am to 10:59am.)
+
+#### These variances suggest a possible shift from destination-focused to recreational travel among casual riders starting at 9am.
+
+## **10.6d Inspecting AM Casual Electric Trip Duration Variance**
+
+#### The dataframe and visualization below performs the same study as 10.7c, but inspects electric bikes.
+
+    electric_casual_workday_am_peak <- peak_season_workday %>% 
+      filter(customer_type == 'casual' & bike_type == 'electric_bike') %>% 
+      filter(start_hour >= 7 & start_hour <= 10) %>% 
+      group_by(start_hour) %>% 
+      summarize(mean_trip_duration = mean(trip_length))%>% 
+      mutate(percent_variance = ((mean_trip_duration - 877.7879)/877.7879)*100)
+
+    viz_am_casual_electric_variance <- ggplot(data = electric_casual_workday_am_peak)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = percent_variance)
+      )+
+        labs(title = 'Trip Duration Variance for Casual/Electric AM Commutes',
+             subtitle = 'Comparing actual trip duration versus annual workday averages',
+             x = 'Starting Hour',
+             y = 'Percent variance',
+             caption = 'Average casual/classic workday duration is 877.79 seconds')
+
+    print(viz_am_casual_electric_variance)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-89-1.png)
+
+## **10.7d Inspecting AM Casual Electric Trip Duration Variance**
+
+#### Casual/Electric trip times for 7am through 8:59am are well below the annual AM average (14.55% shorter from 7am to 7:59am and 9.78% shorter from 8am to 8:59am.)
+
+#### Rides from 9am to 9:59am are 15.04% longer than the annual AM average, while rides from 10am to 10:59am are 35.23% longer than the workday average.
+
+## **10.7e Interpretting Casual AM Trip Duration**
+
+#### Based on the above visualizations, we see that casual riders take shorter trips from 7am to 8:59am, while rides initiated after 9am grow progressively longer from 9am to 10:59am.
+
+#### This could indicate a shift at 9am from direct, destination-focused riding to slower recreational rides in the late morning.
+
+#### These findings suggest that there is a window of opportunity to encourage AM commute behavior among casual riders using either type of bike specifically from 7am to 8:59am.
+
+## **10.7f Peak Season PM Commutes**
+
+## **Baseline Trip Duration (PM)**
+
+    ##PM Baseline
+    annual_workday_duration_pm <- trips_workday %>%
+      filter(start_hour >= 16 & start_hour <= 19) %>%
+      group_by(customer_type, bike_type) %>% 
+      summarize(mean_duration = mean(trip_length))
+    view(annual_workday_duration_pm)
+
+## **10.7f Baseline Trip Duration (PM)**
+
+#### Casual riders have a baseline trip duration of 21 minutes and 17 seconds (1277 seconds) on classic bikes and a baseline trip duration of 16 minutes and 46 seconds (1006 seconds) on electric bikes.
+
+#### Casual electric rides are on average 21.22% shorter than casual classic bike rides.
+
+#### Members have a baseline trip duration of 13 minutes and 15 seconds (795 seconds) on classic bikes, and a baseline trip duration of 12 minutes and 20 seconds (740 seconds) on electric bikes.
+
+#### Member electric rides are on average 6.97% shorter than member classic bike rides.
+
+    viz_peak_season_workday_duration_pm <- ggplot(data = 
+                               peak_season_workday_grouped_pm_commute)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = (mean_trip_duration/60),
+                             fill = customer_type),
+               position = 'dodge')+
+      facet_wrap(~bike_type)+
+      labs(title = "Peak Season PM Commute Trip Durations",
+           subtitle = "Based on trip data from weeks 24 through 27",
+           x = "Starting Hour",
+           y = "Average Trip Duration (Minutes)")
+
+    print(viz_peak_season_workday_duration_pm)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-91-1.png)
+
+## **10.7h Peak Season PM Commute Duration Findings**
+
+#### A visualization of trip duration during the 4pm to 7:59pm commute window shows similar behavior for member riders as we saw during the AM commute: Shorter rides than casual riders, and very little variance in trip duration across bike types and starting hours.
+
+#### Meanwhile, casual rider behavior appears to be much more consistent in the evening hours than we saw during the AM commute period, more closely reflecting member behavior patterns.
+
+## **10.7g Inspecting PM Classic/Casual Trip Duration Variance**
+
+    classic_casual_workday_pm_peak <- peak_season_workday %>% 
+      filter(customer_type == 'casual' & bike_type == 'classic_bike') %>% 
+      filter(start_hour >= 16 & start_hour <= 19) %>% 
+      group_by(start_hour) %>% 
+      summarize(mean_trip_duration = mean(trip_length)) %>% 
+      mutate(percent_variance = ((mean_trip_duration - 1277.1967)/1277.1967)*100)
+
+    viz_pm_casual_classic_variance <- ggplot(data = classic_casual_workday_pm_peak)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = percent_variance)
+      )+
+      labs(title = 'Trip Duration Variance for Casual/Classic PM Commutes',
+           subtitle = 'Comparing actual trip duration versus annual workday averages',
+           x = 'Starting Hour',
+           y = 'Percent variance',
+           caption = 'Annual average casual/classic workday PM duration is 1277 seconds')
+
+    print(viz_pm_casual_classic_variance)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-93-1.png)
+
+## **10.7g Inspecting PM Classic/Casual Trip Duration Variance**
+
+#### The above visualization shows little variance in peak season classic/casual trip duration (-1.98% to 2.60%) compared to annual averages for the same time period.
+
+## **10.7h Inspecting PM Electric/Casual Trip Duration Variance**
+
+    electric_casual_workday_pm_peak <- peak_season_workday %>% 
+      filter(customer_type == 'casual' & bike_type == 'electric_bike') %>% 
+      filter(start_hour >= 16 & start_hour <= 19) %>% 
+      group_by(start_hour) %>% 
+      summarize(mean_trip_duration = mean(trip_length)) %>% 
+      mutate(percent_variance = ((mean_trip_duration - 1006.2264)/1006.2264)*100)
+
+    viz_pm_casual_electric_variance <- ggplot(data = electric_casual_workday_pm_peak)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = percent_variance)
+      )+
+      labs(title = 'Trip Duration Variance for Casual/Electric PM Commutes',
+           subtitle = 'Comparing actual trip duration versus annual workday averages',
+           x = 'Starting Hour',
+           y = 'Percent variance',
+           caption = 'Annual average casual/electric workday PM duration is 1006 seconds')
+
+    print(viz_pm_casual_electric_variance)
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-95-1.png)
+
+## **10.7h Inspecting PM Electric/Casual Trip Duration Variance**
+
+#### The above visualization shows that casual riders on electric bikes are prone to slightly longer rides than the annual average for this time period, however this variance is marginal at between 2.16% and 4.24%.
+
+## **10.7i Comparing Member Ride Duration to Casual Ride Duration (PM Peak Season)**
+
+    ## Classic member pm variance
+    classic_member_workday_pm_peak <- peak_season_workday %>% 
+      filter(customer_type == 'member' & bike_type == 'classic_bike') %>% 
+      filter(start_hour >= 16 & start_hour <= 19) %>% 
+      group_by(start_hour) %>% 
+      summarize(mean_trip_duration = mean(trip_length)) %>% 
+       mutate(percent_variance = ((mean_trip_duration - 795.1282)/795.1282)*100)
+
+    viz_pm_member_classic_variance <- ggplot(data = classic_member_workday_pm_peak)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = percent_variance)
+      )+
+      labs(title = 'Trip Duration Variance for Member/Classic PM Commutes',
+           subtitle = 'Comparing actual trip duration versus annual workday averages',
+           x = 'Starting Hour',
+           y = 'Percent variance',
+           caption = 'Annual average member/classic workday duration is 795 seconds')
+
+    ## Comparing casual and member classic ride duration variances
+    print(ggarrange(viz_pm_member_classic_variance, 
+                    viz_pm_casual_classic_variance + 
+                      rremove("x.text"), 
+              labels = c('A', 'B'),
+              common.legend = TRUE, legend = "bottom"))
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-96-1.png)
+
+    ## Electric member pm variance
+    electric_member_workday_pm_peak <- peak_season_workday %>% 
+      filter(customer_type == 'member' & bike_type == 'electric_bike') %>% 
+      filter(start_hour >= 16 & start_hour <= 19) %>% 
+      group_by(start_hour) %>% 
+      summarize(mean_trip_duration = mean(trip_length)) %>% 
+      mutate(percent_variance = ((mean_trip_duration - 739.6683)/739.6683)*100)
+
+    viz_pm_member_electric_variance <- ggplot(data = electric_member_workday_pm_peak)+
+      geom_col(mapping = aes(x = start_hour,
+                             y = percent_variance)
+      )+
+      labs(title = 'Trip Duration Variance for Member/Electric PM Commutes',
+           subtitle = 'Comparing actual trip duration versus annual workday averages',
+           x = 'Starting Hour',
+           y = 'Percent variance',
+           caption = 'Annual average member/classic workday duration is 740 seconds')
+
+    ## Comparing casual and member electric ride duration variances
+    print(ggarrange(viz_pm_member_electric_variance, 
+                    viz_pm_casual_electric_variance + 
+                      rremove("x.text"), 
+              labels = c('A', 'B'),
+              common.legend = TRUE, legend = "bottom"))
+
+![](Cyclistic_markdown_PT_1_19_23_files/figure-markdown_strict/unnamed-chunk-96-2.png)
+
+## **10.7i Comparing Member Ride Duration to Casual Ride Duration (PM Peak Season)**
+
+#### While casual riders take their longest rides of the PM commute period from 4pm to 4:59pm on both classic and electric bikes, this period marks the shortest rides for member riders on both classic and electric bikes.
+
+#### Starting at 5pm, peak season member bike rides become significantly longer than their annual averages. Member electric rides become 7.32% to 7.85% longer from 5pm to 7:79pm, while member classic rides become 8.49% to 12.00% longer than annual averages for the same time periods.
+
+#### These longer-than-average PM rides might indicate that members are either riding bikes door-to-door, instead of as part of a multimodal transportation plan, or that they are enjoying recreational rides during Chicago’s best riding weather.
+
+## **10.7j Interpreting Member/Casual Ride Durations During AM/PM Commute Periods**
+
+#### Based on the above analysis and our study of start times during peak season (10.6d), we can deduce that the most notable change in trip duration occurs with casual riders on electric or casual bikes from 7:00am to 8:59am, where rides are significantly shorter than annual averages for the same cohorts of riders.
+
+#### During the PM commute window, we see casual riders taking slightly longer trips when using electric bikes, while classic rides remain close to the annual average.
+
+#### Members appear to take more advantage of the nicer weather and appear to take longer evening rides, either recreationally or as door-to-door commute trips home.
+
+## **10.8 Station-To-Station Analysis**
+
+#### At this point in our analysis, we have compared and contrasted casual and member behavior based on when they use the Cyclistic system, rider preferences between electric and classic bikes, and seen how time, weather, day, and bike type impact ride duration.
+
+#### In our final stage of analysis, we will use station-to-station data in order to answer any remaining questions on customer behavior and better target Cyclistic’s digital marketing campaign to achieve their business task.
+
+#### For this analysis, we will use the ‘trips\_w\_stations’ dataframe we created during data transformation. This dataframe includes all cleaned records that contained complete station name and GPS data for both start and end stations, and accounts for 77% of all trips used for analysis.
+
+#### This geographic analysis will highlight four key periods of time: Peak-season weekends, Thursday pm commutes, Friday am commutes, and Friday pm commutes. Additionally, we will incorporate a detailed look at casual rider behavior during AM commutes to better understand why casual trip durations spike after 9am.
+
+## **10.8a Peak Season Weekends**
+
+#### Filtering for peak season weekends
+
+    stations_peak_weekend <- trips_w_stations %>% 
+      filter(workday_weekend == 'weekend') %>% 
+      filter(week >= 24 & week <= 27)
+
+    stations_peak_we_cas <- stations_peak_weekend %>% 
+      filter(customer_type == 'casual')
+
+    stations_peak_we_mem <- stations_peak_weekend %>% 
+      filter(customer_type == 'member')
+
+    ## Weekend member start station
+    stat_we_mem_grouped_start <- stations_peak_we_mem %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+      
+    ## Weekend member end station
+    stat_we_mem_grouped_end <- stations_peak_we_mem %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+    ## Weekend casual start station for viz
+    stat_we_cas_grouped_start <- stations_peak_we_cas %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+      
+    ## Weekend casual end station for viz
+    stat_we_cas_grouped_end <- stations_peak_we_cas %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+## **Visualizing peak season weekend activity**
+
+    viz_peak_we_stations <-  
+      mapview(stat_we_mem_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Top 50 member start stations',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Greens')
+      )+ 
+      mapview(stat_we_mem_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Top 50 member end stations',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Reds')
+      ) +
+      mapview(stat_we_cas_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Blues'),
+              layer.name = 'Top 50 casual start stations',
+              zcol = 'ride_count'
+      ) +
+      mapview(stat_we_cas_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Oranges'),
+              layer.name = 'Top 50 casual end stations',
+              zcol = 'ride_count'
+      )
+
+[![Note: mapview() creates an interactive object that cannot be viewed
+in knitted files. Run the above chunks in R for full functionality, or
+view a similar visualization in my Tableau Public presentation - click
+image to view Tableau
+presentation.](cyclistic_final_images/weekend_map.png)](https://public.tableau.com/shared/4PQF289SW?:display_count=n&:origin=viz_share_link)
+
+## **10.8a Peak Season Weekend Analysis**
+
+#### The above visualization shows the top 50 start and end stations for member and casual riders during peak season weekends.
+
+## **Lake Side Popularity**
+
+#### Based on our visualization, casual riders tend to start and end their rides at the city’s easternmost stations and remain there, taking advantage of bike paths along the waterfront and Magnificent Mile neighborhoods. Casual rides cluster tightly along the coast, with only three end stations on the west side of the Chicago River, two of which are located next to large public parks (Wicker Park and Logan Square), and the third positioned at a major traffic intersection (West Division and Milwaukee Ave).
+
+#### Of note are the top 5 casual customer start/end stations, Streeter Dr & Grand Ave, DuSable Lake Shore Dr & Monroe St, Michigan Ave & Oak St, DuSable Lake Shore Dr & North Blvd, and Theater on the Lake.
+
+#### A review of weekend member activity shows a similar preference for lakeside riding, however we see the Magnificent Mile neighborhood is far less popular with member riders. Additionally, we see five of the top 50 member end stations are west of the Chicago River.
+
+## **Start/End Clustering**
+
+#### Unlike other time periods under review, we see very little geographic spread in start/end station activity during the weekend. Regardless of customer type, almost all of the top 50 start/end stations appear to cluster along the shoreline and between the Near North Side, Lakeview, and Lincoln Park neighborhoods
+
+## **Interpretation**
+
+#### Overall, weekend activity seems to match our expectations - largely recreational riding from both casual and member riders along the shore.
+
+#### It is notable that stations within the Loop, Chicago’s primary office/business district, are absent from any top 50 categories.
+
+#### Weekends reveal three popular traffic corridors, particularly among casual riders: South/North Michigan Avenue, North Wells Street, and North Clark Street.
+
+## **10.8b Peak Season Thursday PM (4pm to 7:59pm)**
+
+    stations_peak_thursday_pm <- trips_w_stations %>% 
+      filter(weekday == "Thursday") %>% 
+      filter(week >= 24 & week <= 27) %>% 
+      filter(start_hour >= 16 & start_hour <= 19)
+
+    stations_peak_thursday_pm_cas <- stations_peak_thursday_pm %>% 
+      filter(customer_type == 'casual')
+
+    stations_peak_thursday_pm_mem <- stations_peak_thursday_pm %>% 
+      filter(customer_type == 'member')
+
+#### Prepping for viz
+
+    ## Thursday pm member start station 
+    stat_thurs_pm_mem_grouped_start <- stations_peak_thursday_pm_mem %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## Thursday pm member end station
+    stat_thurs_pm_mem_grouped_end <- stations_peak_thursday_pm_mem %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+    ## Thursday pm casual start station for viz
+    stat_thurs_pm_cas_grouped_start <- stations_peak_thursday_pm_cas %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## Thursday pm casual end station for viz
+    stat_thurs_pm_cas_grouped_end <- stations_peak_thursday_pm_cas %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+#### Visualizing peak season Thursday pm commutes
+
+    viz_peak_thurs_pm <-  
+      mapview(stat_thurs_pm_mem_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Top 50 Member Start Stations',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Greens')
+      )+ 
+      mapview(stat_thurs_pm_mem_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Top 50 Member end Stations',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Reds')
+      ) +
+      mapview(stat_thurs_pm_cas_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Blues'),
+              layer.name = 'Top 50 Casual Start Stations',
+              zcol = 'ride_count'
+      ) +
+      mapview(stat_thurs_pm_cas_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Oranges'),
+              layer.name = 'Top 50 Casual End Stations',
+              zcol = 'ride_count'
+      )
+
+[![Note: mapview() creates an interactive object that cannot be viewed
+in knitted files. Run the above chunks in R for full functionality, or
+view a similar visualization in my Tableau Public presentation - click
+image to view Tableau
+presentation.](cyclistic_final_images/thurs_pm_map.png)](https://public.tableau.com/shared/4PQF289SW?:display_count=n&:origin=viz_share_link)
+
+## **10.8b Peak Season Thursday PM Commutes**
+
+## **Start Station Preferences**
+
+#### Casual riders continue to show a preference for shoreside start and end stations, however we do see an increase in casual activity in the Near North Side neighborhood and inner-city stations west of North Wells Street.
+
+#### Although member riders show strong presence at shoreside stations, member riders also demonstrate a much higher tendency to start rides in the Loop and Greektown neighborhoods.
+
+## **Transit Hub/Multimodal Activity**
+
+#### When comparing the top 50 member/casual start stations on Thursday evening rush hours, we find a critical similarity that will be key to our marketing campaign: Transit hub stations.
+
+#### Within the top-50 start stations for member and casual riders, six are located within one block of “El” train stations. While these docks are used more heavily by member riders, they may be critical to converting casual customers into members. These stations are adjacent to the Belmont, Fullerton, North/Clybourn, Clark/Division, and Grand El stations, as well as the Ogilvie Transportation Center, which serves as a regional transit hub.
+
+#### These Cyclistic docks are as follows: Wilton Ave & Belmont Ave, Sheffield Ave & Fullerton Ave, Halsted St & Clybourn Ave, Clark St & Elm St, Wabash Ave & Grand Ave, and Clinton St & Washington Blvd.
+
+## **Destinations**
+
+#### A review of member/casual end stations shows some activity from the Loop and Near North Side neighborhoods to transit hubs to the west and south, however it appears the most popular destination stations land between the Lake View and Lincoln Park neighborhoods, indicating post-work trips either home, or to nightlife locations frequently found in these recently-gentrified neighborhoods.
+
+## **Interpretation**
+
+#### The heavy member/casual overlap in start station activity near transit hubs indicates likely multimodal commuting. This presents a great “gateway” use-case for casual riders, as it combines the flexibility of bike commuting with the ease of public transit. As a result, shunting more bikes to the Near North Side and docks near El stations should be a priority.
+
+## **10.8c Friday AM Commutes**
+
+    #### Friday AM peak filter
+    stations_peak_friday_am <- trips_w_stations %>% 
+      filter(weekday == "Friday") %>% 
+      filter(week >= 24 & week <= 27) %>% 
+      filter(start_hour >= 7 & start_hour <= 10)
+
+    stations_peak_friday_am_cas <- stations_peak_friday_am %>% 
+      filter(customer_type == 'casual')
+
+    stations_peak_friday_am_mem <- stations_peak_friday_am %>% 
+      filter(customer_type == 'member')
+
+#### Prepping for Viz
+
+    ## Friday am member start station 
+    stat_fri_am_mem_grouped_start <- stations_peak_friday_am_mem %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## Friday am member end station
+    stat_fri_am_mem_grouped_end <- stations_peak_friday_am_mem %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+    ## Friday am casual start station for viz
+    stat_fri_am_cas_grouped_start <- stations_peak_friday_am_cas %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## Friday am casual end station for viz
+    stat_fri_am_cas_grouped_end <- stations_peak_friday_am_cas %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+#### Friday AM visualization
+
+    viz_peak_fri_am <-  
+      mapview(stat_fri_am_mem_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Member Start Station Ride Count',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Greens')
+      )+ 
+      mapview(stat_fri_am_mem_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Member End Station Ride Count',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Reds')
+      ) +
+      mapview(stat_fri_am_cas_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Blues'),
+              layer.name = 'Casual Start Station Ride Count',
+              zcol = 'ride_count'
+      ) +
+      mapview(stat_fri_am_cas_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Oranges'),
+              layer.name = 'Casual End Station Ride Count',
+              zcol = 'ride_count'
+      )
+
+[![Note: mapview() creates an interactive object that cannot be viewed
+in knitted files. Run the above chunks in R for full functionality, or
+view a similar visualization in my Tableau Public presentation - click
+image to view Tableau
+presentation.](cyclistic_final_images/fri_am_map.png)](https://public.tableau.com/shared/4PQF289SW?:display_count=n&:origin=viz_share_link)
+
+## **10.8c Peak Season Friday AM Commutes**
+
+## **Lakeside Popularity**
+
+#### Casual riders continue to show lots of activity around Cyclistic’s three main lakeside stations: Streeter Dr and Grand Ave, Montrose Harbor, and Michigan Ave & Oak Street.
+
+## **Start Station Clustering**
+
+#### We see two clusters of start stations popular amongst member and casual riders: First, between the residential neighborhoods of Lake View and Lincoln Park, and Second around the Near North Side downtown area.
+
+#### Members also cluster start stations west of the Loop neighborhood near the Ogilive Transportation Center and some light clustering south of the Loop.
+
+#### Casual riders also cluster start stations near the Loop, however we see more activity at the Loop’s northern and eastern borders.
+
+## **End Station Clustering**
+
+#### A review of end station activity shows a very pronounced cluster of members and casual riders ending their trips within the Loop and Near North Side neighborhoods. Likely indicating business commuters.
+
+## **Transit Hub Activity**
+
+#### Although we do see some overlapping member/casual activity near the Ogilvie Transportation Center and Millennium Station, El stations see less activity than the Thursday PM window, with only the Clark/Division, Chicago, and Fullerton stations seeing member/casual overlap.
+
+#### While it is not directly adjacent to a transit hub, the Kingsbury St & Kinzie St station is within short walking distance of the Ogilive Transportation Center and appears popular with both casual and member riders. This station may see high traffic due to stations closer to the OTC running out of bikes to rent.
+
+## **Interpretation**
+
+#### While we see less indications of multimodal commuting, the natural flow of bikes from Lake View/Lincoln Park towards the loop and the large number of casual trips started just north of the Loop indicate a great opportunity to expand casual AM ridership.
+
+#### Since a ride from Lake View/Lincoln Park into the city center is rather long, providing additional electric bikes along North Clark Street might entice additional casual riders to use the system.
+
+## **10.8d Friday PM Commutes**
+
+    #### Friday PM peak filter
+    stations_peak_friday_pm <- trips_w_stations %>% 
+      filter(weekday == "Friday") %>% 
+      filter(week >= 24 & week <= 27) %>% 
+      filter(start_hour >= 16 & start_hour <= 19)
+
+    stations_peak_friday_pm_cas <- stations_peak_friday_pm %>% 
+      filter(customer_type == 'casual')
+
+    stations_peak_friday_pm_mem <- stations_peak_friday_pm %>% 
+      filter(customer_type == 'member')
+
+    ## Friday pm member start station 
+    stat_fri_pm_mem_grouped_start <- stations_peak_friday_pm_mem %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## Friday pm member end station
+    stat_fri_pm_mem_grouped_end <- stations_peak_friday_pm_mem %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+    ## Friday pm casual start station for viz
+    stat_fri_pm_cas_grouped_start <- stations_peak_friday_pm_cas %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## Friday pm casual end station for viz
+    stat_fri_pm_cas_grouped_end <- stations_peak_friday_pm_cas %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+#### Friday PM Visualization
+
+    ## Viz
+    viz_peak_fri_pm <-  
+      mapview(stat_fri_pm_mem_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Member Start Station Ride Count',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Greens')
+      )+ 
+      mapview(stat_fri_pm_mem_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = 'Member End Station Ride Count',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Reds')
+      ) +
+      mapview(stat_fri_pm_cas_grouped_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Blues'),
+              layer.name = 'Casual Start Station Ride Count',
+              zcol = 'ride_count'
+      ) +
+      mapview(stat_fri_pm_cas_grouped_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Oranges'),
+              layer.name = 'Casual End Station Ride Count',
+              zcol = 'ride_count'
+      )
+
+[![Note: mapview() creates an interactive object that cannot be viewed
+in knitted files. Run the above chunks in R for full functionality, or
+view a similar visualization in my Tableau Public presentation - click
+image to view Tableau
+presentation.](cyclistic_final_images/fri_pm_map.png)](https://public.tableau.com/shared/4PQF289SW?:display_count=n&:origin=viz_share_link)
+
+## **10.8d Peak Season Friday PM Commutes**
+
+## **Thursday PM/Friday PM Similarities**
+
+#### We see nearly identical behavior from member and casual riders when comparing Friday and Thursday PM rush hour periods. Although ride counts vary slightly from station to station and change their overall ranking, we see an almost identical list of popular stations amongst start and end stations for casual and member riders.
+
+## **Interpretation**
+
+#### The similarity between Thursday and Friday pm rush hour activity bodes extremely well, as it means we are working with predictable patterns of behavior from both cohorts of customers. Signing up for a Cyclistic subscription only makes sense if a customer uses the system frequently and bikes are easily available. Because customer behavior appears consistent from weeknight to weeknight, it should be easy to accomodate this need for reliability by restocking popular stations during the middle of the day.
+
+## **10.8e Casual Behavior during Thursday/Friday AM Commutes By Hour**
+
+#### In light of the notable increase in trip duration from 9am to 10:59am found in 10.7e, I think it is important to visualize this behavior by hour. Below is a visualization of casual rides by start hour. Use the layer selection to observe how casual behavior changes with time.
+
+    ## Hourly filter
+    stations_peak_thurs_fri_7_8 <- trips_w_stations %>% 
+      filter(customer_type == "casual") %>% 
+      filter(weekday == "Friday" |
+               weekday == "Thursday") %>% 
+      filter(start_hour == 7 |
+               start_hour == 8)
+
+
+    stations_peak_thurs_fri_9_10 <- trips_w_stations %>% 
+      filter(customer_type == "casual") %>% 
+      filter(weekday == "Friday" |
+             weekday == "Thursday") %>% 
+      filter(start_hour == 9 |
+               start_hour == 10)
+
+    ## 7-8 start station
+    stat_7_8_start <- stations_peak_thurs_fri_7_8 %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## 7-8 end station
+    stat_7_8_end <- stations_peak_thurs_fri_7_8 %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+    ## 9-10 start
+    stat_9_10_start <- stations_peak_thurs_fri_9_10 %>% 
+      group_by(start_station_name) %>% 
+      summarize(ride_count = n(), start_lng, start_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(start_station_name, .keep_all = TRUE)
+
+    ## 9-10 end
+    stat_9_10_end <- stations_peak_thurs_fri_9_10 %>% 
+      group_by(end_station_name) %>% 
+      summarize(ride_count = n(), end_lng, end_lat,
+                mean_trip_duration = mean(trip_length)) %>% 
+      arrange(desc(ride_count)) %>% 
+      distinct(end_station_name, .keep_all = TRUE)
+
+    viz_thurs_fri_am <-  
+      mapview(stat_7_8_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = '7-8 Casual Start Station Ride Count',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Greens')
+      )+ 
+      mapview(stat_7_8_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              layer.name = '7-8 Casual End Station Ride Count',
+              zcol = 'ride_count',
+              col.regions = brewer.pal(n = 8, name = 'Reds')
+      ) +
+      mapview(stat_9_10_start[1:50, ],
+              xcol = 'start_lng',
+              ycol = 'start_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Blues'),
+              layer.name = '9-10 Casual Start Station Ride Count',
+              zcol = 'ride_count'
+      ) +
+      mapview(stat_9_10_end[1:50, ],
+              xcol = 'end_lng',
+              ycol = 'end_lat',
+              cex = 'ride_count',
+              alpha = 0.5,
+              grid = F,
+              crs = 4269,
+              legend = T,
+              col.regions = brewer.pal(n = 8, name = 'Oranges'),
+              layer.name = '9-10 Casual End Station Ride Count',
+              zcol = 'ride_count'
+      )
+
+[![Note: mapview() creates an interactive object that cannot be viewed
+in knitted files. Run the above chunks in R for full functionality, or
+view a similar visualization in my Tableau Public presentation - click
+image to view Tableau
+presentation.](cyclistic_final_images/thurs_fri_am_map.png)](https://public.tableau.com/shared/4PQF289SW?:display_count=n&:origin=viz_share_link)
+
+## **10.8e Casual Behavior during Thursday/Friday AM Commutes By Hour**
+
+#### The above visualization clarifies our findings in 10.7e.
+
+#### Casual rides initiated from 7am - 8:59am have start stations clustered in neighborhoods around the Loop (Near North Side, Greektown, and Printer’s Row), as well as along the North Wells and North Lincoln Avenue traffic corridors. El stations and transit hubs appear to be at the center of these clusters, indicating multimodal commuting.
+
+#### Casual rides initiated at this time have end stations clustered heavily in the Loop business district and Transit hubs just east and west of the neighborhood (Chicaco Union Station, Ogilvie and Transportation Center).
+
+#### Casual rides initiated from 9am to 10:59am have far more dispersed start stations, with lakeside stations and stations along the Miracle Mile showing far more popularity than earlier in the day. While some popular start stations exist in the Near North Side, just north of the loop, these stations are far less popular than from 7am - 8:59am.
+
+#### While there are still 9 popular end stations within the loop during this time, they represent a much lower percentage of overal rides than we see earlier in the day. Instead, we see lakeside stations and those along Miracle Mile resume their top positions.
+
+## **Interpretation**
+
+#### A detailed review of casual rider behavior on workday mornings demonstrates that commuter activity is taking place, albeit during a smaller window of time than member riders. We also now have clarification on the jump in casual trip duration after 9am, which does appear to reflect a move from shorter, destination-focused riding to recreational riding more similar to what we see during peak season weekends.
+
+## **11 Key Findings**
+
+#### After a thorough review of annual ride data, we now have answers to the questions posed at the beginning of this analysis. The following section outlines key takeaways for Cyclistic’s digital marketing team and is followed by data-backed recommendations for their new campaign.
+
+## **Comparing Casual and Member Riders**
+
+#### The average casual rider is a less experienced cyclist who seeks comfortable, longer, more leisurely rides.
+
+#### The average member rider is a more experienced cyclist who demonstrates a higher tolerance for poor weather and destination-focused rides.
+
+#### Casual riders demonstrate a higher demand for electric bikes (10.5b) and benefit significantly from the electric assist, with electric bikes shortening their average ride by 25.58% (10.5c). If weather conditions are optimal (peak season), they are somewhat more willing to use classic bikes (10.5e). Casual riders are significantly slower than member riders when moving from start to end stations (10.5g).
+
+#### Member riders show less demand for electric bikes (10.5b) and see a smaller decrease (8.41%) in trip duration when riding electric bikes (10.5c), suggesting they are somewhat more adept at selecting bike types based on their planned journey.
+
+#### Based on trip durations and distances traveled, members travel 50.93% faster than casual riders when both are using classic bikes. Members travel 57.47% faster than casual riders when both are using electric bikes (10.5g).
+
+## **Peak Season and Weather**
+
+#### Casual riders are extremely sensitive to weather conditions. Casual ridership peaks when temperatures are consistently around 80 degrees and humidity sits around 50%. Rain appears to have a very limited impact on casual ridership, however rainfall below 0.5 inches does seem to have a slight impact on casual rider turnout.
+
+#### These optimal conditions were met during weeks 24 through 27, which initiated peak season (10.4a-e).
+
+#### Casual riders make up 39.82% of all Cyclistic rides annually, but that share peaked to 47.79% during weeks 24 through 27 (10.3c).
+
+#### When weather conditions are not optimal, monthly casual ridership drops significantly. From November to April, casual ridership drops by more than two thirds (10.3a). Meanwhile, monthly member ridership only decreases by about one third from november to April (10.3a)
+
+#### Without additional incentives, casual riders will use the system most during the weekend (10.2a). Over the course of a full year, weekend member rides only exceed casual rides from 5am to 12:59pm and from 6pm to 8:59pm (10.2c).
+
+#### Over the course of a full year, casual riders ride the most on Thursday, Monday, and Friday. Member riders ride most on Tuesday, Wednesday and Thursday (10.2a)
+
+#### During peak season, casual riders will initiate 6.71% more rides during the 7am - 10:59am window, 9.49% more rides from 11am to 3:59pm, and 7.53% more rides during the 4pm - 7:59pm window (10.6d).
+
+#### During the peak season AM window, casual riders are most active Thursday, Friday, and Monday mornings (10.6e).
+
+#### During the peak season PM window, casual riders are most active Thursday, Friday, and Wednesday nights (10.6e).
+
+## **Station-to-Station Behavior During Peak Season**
+
+## **Weekends (10.8a)**
+
+#### Both member and casual riders take the majority of trips along the Chicago waterfront, with elevated casual activity along the Magnificent mile and South/North Michigan Avenue, North Wells Street, and North Clark Street traffic corridors.
+
+#### Members show more activity west of the Chicago River when compared to casual riders, who only frequented stations around Logan Square, Wicker Park, and a major traffic intersection at West Division and Milwaukee Ave.
+
+## **Thursday and Friday Evenings (10.8b, 10.8d)**
+
+#### Both evenings showed consistent behavior from casual and member riders from night to night.
+
+#### Casual riders continue to show strong presence at lakeside stations, however we see increased activity in the Near North Side neighborhood.
+
+#### Both casual and member ride start stations clustered around six mass transit stations (Belmont, Fullerton, North/Clybourn, Clark/Division, and Grand El stations, and the Ogilvie Transportation Center.)
+
+#### Casual and Member riders frequently terminate rides along north-south traffic corridors from downtown Chicago to the Lake View and Lincoln Park neighborhoods, indicating travel to residential and nightlife districts.
+
+## **Thursday AM (10.8c)**
+
+#### Member and casual rides frequently start in the Lake View/Lincoln Park neighborhoods and terminate in the Near North Side neighborhoods, indicating commuter travel to the downtown Chicago region.
+
+#### While member start stations continue to cluster around popular El stations, we see less casual rides starting at these points, indicating less willingness to engage in multimodal commuting. Despite this, there is some notable overlap between the two cohorts of riders around the Ogilvie Transportation Center and Millennium Station.
+
+## **Thursday/Friday Casual Rides By Hour (10.8e)**
+
+#### There is a clear desire for casual riders to use Cyclistic for commuting purposes from 7am to 8:59am, with the North Wells and North Lincoln Avenue traffic corridors being popular start station locations, as well as the Greektown and Near North Side neighborhoods. This indicates that earlier in the morning, casual riders are open to both door-to-door (in the case of the traffic corridors) and multimodal (in the case of Near North Side and Greektown) commuting. Rides initiated at this time have a much higher frequency of end stations within the Loop neighborhood.
+
+#### After 9am, we see behavior much more in line with weekend activity, as lakeside stations and the Miracle Mile neighborhood see signficant increases in activity.
+
+## **11 Recommendations**
+
+## **1 - Timing**
+
+#### In order to reach the most casual customers when they are most engaged with the Cyclistic system, the digital marketing team should closely monitor weather forecasts to determine when to activate their campaign.
+
+#### The digital marketing team should prepare to activate their campaign during the first weeks that the following conditions will be consistently met:
+
+#### 1) Average weekly temperatures reach about 80 degrees.
+
+#### 2) Average weekly Humidity is below 50%.
+
+#### 3) Weekly rainfall is expected to sit below 0.5 inches.
+
+#### *When monitoring weather to anticipate peak casual ridership, special attention should be paid when average weekly temperature is expected to jump 10+ degrees and humidity is expected to drop by 10% or more.*
+
+## **2 - Strategic Electric Bike Placement**
+
+#### Casual customers have a strong preference for electric bikes, which should be manually shifted to stations where casual riders frequently initiate destination-focused trips, rather than recreational lake-side rides.
+
+#### Weekend: Electric bikes should be shuttled from lakeside stations to those along North Lincoln Ave, North Clarke St, North Wells Street, and North/South Michigan Avenues, as well as near Logan Square and Wicker Park. This would promote more destination-focused travel than the leisure-focused rides along the lake.
+
+#### Workday AM Commute Window: Electric bikes should be positioned along Northern traffic corridors from Lakeview through Lincoln Park and the Near North Side. Additionally, electric bikes should be placed near El stations and Transportation Centers, with a focus on those that ring the Loop to the north (Near North Side), west (Greektown), and south (Printer’s Row).
+
+#### These rebalances must happen before 7am every workday to achieve maximum effect.
+
+#### Stations within one block of the following El Stations are top priority for electric rebalancing: Belmont, Fullerton, North/Clybourn, Clark/Division, and Grand, as well as the Oglvie and Milennium transportation centers.
+
+#### Workday PM Commute Window: Electric Bikes should be positioned along the same traffic coridors and El stations as outlined during the AM commute window, excluding Printer’s Row and Greektown neighborhoods.
+
+## **3 - Encourage Repeat Use**
+
+#### Casual customers who use a bike during the weekday AM or PM commute window should be offered a credit for a free ride during the same period the following day and/or the following commute period. If customers do not use the initial credit, they should be offered a second credit for a ride during the same commute window one week after their initial ride.
+
+#### By encouraging repeat use, casual members will become more familiar with the system and receive additional opportunities to understand how they system can be applied to their daily routine, creating an easy argument for membership.
+
+## **4 - Partner with Cycling Advocacy Groups**
+
+#### Based on rider behavior, casual riders are generally not experienced cyclists. As a result, Cyclistic should partner with existing transportation and cycling advocacy groups that already have experience introducing the concept of bike commuting to novice riders.
+
+#### This mutually beneficial partnership would allow Cyclistic to use the advocacy groups existing outreach network and publicity aparatus. Meanwhile, advocacy groups would have an easier time increasing urban bicycle use because the Cyclistic system removes the need to own a personal bicycle.
+
+## **5 - Focus Messaging on Affordability and Ease-of-Use for Electric Bikes**
+
+#### Most bike share programs charge more for electric bikes, and casual riders have a preference for this option. After completing an electric ride as a non-subscriber, casual riders should be sent a follow-up message showing A) The amoung of money they could save on the ride through membership and B) A comparison of their station-to-station trip duration versus the average station-to-station time on a classic bike.
